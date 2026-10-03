@@ -1,0 +1,14 @@
+{
+  "name": "kindred",
+  "version": "1.0.0",
+  "description": "An AI agent that finds the artists, shows, places and brands your audience already loves, and where to meet them. Powered by Qloo Taste AI.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "node dev-server.js",
+    "test": "node scripts/mocktest.js",
+    "selftest": "node scripts/selftest.js",
+    "examples": "node scripts/build-examples.js"
+  },
+  "engines": { "node": ">=20" }
+}

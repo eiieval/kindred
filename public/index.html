@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kindred · Taste-driven partnership scout</title>
+  <meta name="description" content="An AI agent that finds the artists, shows, places and brands your audience already loves, and where to meet them. Powered by Qloo Taste AI.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; }
+    .glass { background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.08); }
+    .field { background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.1); border-radius: .75rem; padding: .65rem .8rem; outline: none; color: #f1f5f9; }
+    .field:focus { border-color: rgba(232,121,249,.6); }
+    select.field option { background: #0b0d12; }
+    .leaflet-container { background: #0b0d12; }
+  </style>
+</head>
+<body class="bg-[#07080c] text-slate-100 min-h-screen">
+  <header class="max-w-6xl mx-auto px-4 pt-8 pb-6">
+    <div class="flex items-center gap-3">
+      <div class="h-9 w-9 rounded-xl bg-gradient-to-br from-fuchsia-500 to-amber-400"></div>
+      <span class="text-xl font-bold tracking-tight">Kindred</span>
+      <span class="ml-auto text-xs text-slate-400">Powered by Qloo Taste AI</span>
+    </div>
+    <h1 class="mt-10 text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
+      Find who your audience <span class="bg-gradient-to-r from-fuchsia-400 to-amber-300 bg-clip-text text-transparent">already loves</span>,
+      <br class="hidden md:block"> and where to meet them.
+    </h1>
+    <p class="mt-4 text-slate-400 max-w-2xl">Kindred is an AI agent that reads cross-domain taste data from Qloo to scout partnerships across music, podcasts, TV, film, brands and places, then maps where to activate. No personal data, just culture.</p>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 pb-16">
+    <form id="f" class="glass rounded-2xl p-4 grid gap-3 md:grid-cols-[1.2fr_1fr_1.3fr_.8fr_auto]">
+      <input name="brand" required maxlength="80" placeholder="Brand, e.g. Patagonia" class="field">
+      <input name="market" maxlength="80" placeholder="Market city, e.g. Barcelona" class="field">
+      <select name="goal" class="field">
+        <option>Brand partnership or co-branded collab</option>
+        <option>Pop-up activation</option>
+        <option>Music or event sponsorship</option>
+        <option>Creator or talent partnership</option>
+        <option>Podcast or media sponsorship</option>
+      </select>
+      <select name="age" class="field">
+        <option value="">Any age</option>
+        <option value="35_and_younger">35 and younger</option>
+        <option value="36_to_55">36 to 55</option>
+        <option value="55_and_older">55 and older</option>
+      </select>
+      <button id="go" class="rounded-xl bg-white text-black font-semibold px-5 py-2.5 hover:bg-fuchsia-100 disabled:opacity-60">Scout</button>
+    </form>
+    <div id="examples" class="mt-3 flex flex-wrap items-center gap-2 text-sm"></div>
+
+    <section id="out" class="hidden mt-8 grid gap-6 lg:grid-cols-[300px_1fr]">
+      <aside class="glass rounded-2xl p-4 h-fit lg:sticky lg:top-4">
+        <h2 class="text-sm font-semibold text-slate-300">Agent trace</h2>
+        <ol id="trace" class="mt-3 space-y-2 text-sm"></ol>
+      </aside>
+      <div class="space-y-6 min-w-0">
+        <div id="brief" class="glass rounded-2xl p-5 hidden"></div>
+        <div class="glass rounded-2xl p-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <h2 class="font-semibold">Taste graph</h2>
+            <div id="tabs" class="flex flex-wrap gap-1 ml-auto"></div>
+          </div>
+          <div id="grid" class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+        </div>
+        <div class="glass rounded-2xl p-5">
+          <h2 class="font-semibold">Where to activate</h2>
+          <div id="map" class="mt-4 h-80 rounded-xl overflow-hidden"></div>
+          <p id="mapnote" class="mt-2 text-xs text-slate-500"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="text-center text-xs text-slate-500 pb-8 px-4">Built for the Qloo Agentic Hackathon · Taste data by Qloo · Maps © OpenStreetMap contributors © CARTO</footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
