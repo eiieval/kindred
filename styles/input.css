@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { font-family: Inter, system-ui, sans-serif; }
+.glass { background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.08); }
+.field { min-width: 0; width: 100%; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.1); border-radius: .75rem; padding: .65rem .8rem; outline: none; color: #f1f5f9; }
+.field:focus { border-color: rgba(232,121,249,.6); }
+select.field option { background: #0b0d12; }
+.leaflet-container { background: #0b0d12; }
+/* Dark map from standard OpenStreetMap tiles (keyless), matching the UI theme. */
+.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }

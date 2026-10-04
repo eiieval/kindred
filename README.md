@@ -28,6 +28,15 @@ brief ─► LLM agent (tool calling) ─► Qloo tools
 - **Named hotspots.** Heatmap cells are labelled with neighbourhood names via OpenStreetMap reverse geocoding.
 - **Zero dependencies.** Plain Node 20+ and Vercel Functions. The LLM is any OpenAI-compatible endpoint, Gemini by default.
 
+## Security
+
+- API keys live only in server-side environment variables. The browser never receives them.
+- Strict Content-Security-Policy with no third-party scripts: Tailwind is compiled at build time and Leaflet is self-hosted, its files checked against the official 1.9.4 hashes.
+- Upstream error bodies go to server logs with secrets redacted; users only see generic messages.
+- The agent endpoint enforces input allow-lists, a same-origin check, a per-IP rate limit and a concurrency cap.
+- User fields are treated as data in the prompt, and all model output is HTML-escaped before rendering.
+- `npm test` covers these guarantees offline.
+
 ## Run locally
 
 ```bash

@@ -9,6 +9,9 @@ loadEnv();
 const { default: agent } = await import('./api/agent.js');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.md': 'text/markdown' };
 const port = Number(process.env.PORT) || 3000;
+// Same security headers as production, read from vercel.json.
+const cfg = JSON.parse(await readFile(new URL('./vercel.json', import.meta.url), 'utf8'));
+const SECURITY = Object.fromEntries((cfg.headers?.[0]?.headers || []).map((x) => [x.key, x.value]));
 
 http.createServer(async (req, res) => {
   if (req.url.startsWith('/api/agent')) return agent(req, res);
@@ -16,7 +19,7 @@ http.createServer(async (req, res) => {
   if (path.includes('..')) { res.writeHead(400); return res.end(); }
   try {
     const buf = await readFile(join(PUBLIC, path));
-    res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'application/octet-stream' });
+    res.writeHead(200, { ...SECURITY, 'content-type': TYPES[extname(path)] || 'application/octet-stream' });
     res.end(buf);
   } catch {
     res.writeHead(404);

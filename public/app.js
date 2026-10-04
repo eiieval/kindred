@@ -19,7 +19,7 @@ let layer = null;
 function ensureMap() {
   if (map) return;
   map = L.map('map').setView([40.4, -3.7], 3);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap contributors &copy; CARTO', maxZoom: 19 }).addTo(map);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }).addTo(map);
   layer = L.layerGroup().addTo(map);
   setTimeout(() => map.invalidateSize(), 60);
 }
@@ -178,6 +178,7 @@ function renderBrief(b) {
 
 async function run(input) {
   reset(input);
+  if (!input.slug) history.replaceState(null, '', `?${new URLSearchParams({ brand: input.brand, market: input.market || '' })}`);
   try {
     if (input.slug) {
       const r = await fetch(`examples/${input.slug}.json`);
@@ -226,3 +227,12 @@ $('#examples').querySelectorAll('button').forEach((b) => {
     run({ ...e });
   };
 });
+
+// Shareable links: ?brand=Patagonia&market=Barcelona runs that brief on load.
+const params = new URLSearchParams(location.search);
+if (params.get('brand')) {
+  const f = $('#f');
+  f.brand.value = params.get('brand').slice(0, 80);
+  f.market.value = (params.get('market') || '').slice(0, 80);
+  f.requestSubmit();
+}
