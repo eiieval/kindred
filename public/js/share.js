@@ -4,7 +4,7 @@ import { compactEvents } from './core.js';
 
 const DOMAIN_SET = ['artist', 'brand', 'movie', 'tv_show', 'podcast', 'book', 'videogame', 'place', 'destination', 'person'];
 
-export const EVENT_TYPES = ['meta', 'tool_call', 'entities', 'thinking', 'model_turn', 'affinities', 'heatmap', 'demographics', 'tool_error', 'brief', 'baseline', 'error', 'done'];
+export const EVENT_TYPES = ['meta', 'tool_call', 'entities', 'thinking', 'model_turn', 'affinities', 'heatmap', 'demographics', 'tool_error', 'competitors', 'guardrail', 'brief', 'baseline', 'error', 'done'];
 const MAX_EVENTS = 400;
 const MAX_JSON = 400000;
 
@@ -12,6 +12,9 @@ const inRange = (n, lim) => typeof n === 'number' && Number.isFinite(n) && Math.
 const num = (n) => (typeof n === 'number' && Number.isFinite(n) ? n : null);
 const arr = (v, max = 20) => (Array.isArray(v) ? v.slice(0, max) : []);
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+
+// A direct competitor that was skipped or removed, with the Qloo-tag reason.
+const cleanSkip = (x) => ({ name: String(x.name ?? ''), id: x.id ? String(x.id) : null, domain: x.domain ? String(x.domain) : null, affinity: num(x.affinity), rule: String(x.rule ?? ''), reason: String(x.reason ?? ''), proposed: x.proposed === true });
 
 // Shapes the renderer relies on, whatever the link contains.
 function cleanBrief(b) {
@@ -22,6 +25,7 @@ function cleanBrief(b) {
   if (out.activation.venue_evidence) out.activation.venue_evidence = arr(out.activation.venue_evidence).map(obj).map((v) => ({ name: String(v.name ?? ''), evidence: v.evidence ? { ...obj(v.evidence), affinity: num(v.evidence.affinity) } : null }));
   out.messaging_themes = arr(out.messaging_themes).map(String);
   out.watch_outs = arr(out.watch_outs).map(String);
+  if (out.skipped_competitors !== undefined) out.skipped_competitors = arr(out.skipped_competitors, 12).map(obj).map(cleanSkip);
   if (out.provenance) out.provenance = Object.fromEntries(Object.entries(obj(out.provenance)).map(([k, v]) => [k, num(v) ?? 0]));
   return out;
 }
@@ -38,7 +42,7 @@ export function sanitizeEvents(list) {
     const data = ev.data && typeof ev.data === 'object' && !Array.isArray(ev.data) ? { ...ev.data } : {};
     if (ev.type === 'entities' || ev.type === 'affinities') {
       data.results = (Array.isArray(data.results) ? data.results : []).slice(0, 15).map(strip)
-        .map((e) => ({ ...e, affinity: num(e.affinity), tags: arr(e.tags, 6).map(String) }))
+        .map((e) => ({ ...e, affinity: num(e.affinity), tags: arr(e.tags, 6).map(String), competitor: e.competitor ? String(e.competitor) : undefined }))
         .map((e) => (e.lat !== undefined && !geo(e) ? { ...e, lat: null, lng: null } : e));
       if (ev.type === 'affinities' && !DOMAIN_SET.includes(data.domain)) continue;
     }
@@ -48,6 +52,8 @@ export function sanitizeEvents(list) {
       data.total_cells = num(data.total_cells) ?? undefined;
     }
     if (ev.type === 'brief') Object.assign(data, cleanBrief(data));
+    if (ev.type === 'competitors') data.skipped = arr(data.skipped, 15).map(obj).map(cleanSkip);
+    if (ev.type === 'guardrail') data.rejected = arr(data.rejected, 8).map(obj).map(cleanSkip);
     if (ev.type === 'meta') data.started_at = String(data.started_at ?? '');
     if (ev.type === 'baseline') {
       data.llm_only = arr(data.llm_only, 8).map(obj).map((p) => ({ ...p, qloo: { ...obj(p.qloo), affinity: num(p.qloo?.affinity) } }));

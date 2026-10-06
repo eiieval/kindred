@@ -77,6 +77,90 @@ export function verifyBrief(brief, aff = {}) {
   return b;
 }
 
+// Direct competitors. Co-affinity is strongest inside a category (Patagonia's audience also loves The North
+// Face), so the top of an affinity list is full of rivals. Qloo's own tags decide what counts as one, which
+// keeps the check deterministic and every exclusion explainable:
+//   1. Qloo lists the candidate as a competitor of the brand, or the brand as a competitor of the candidate;
+//   2. both share a Qloo industry and a product category (Blue Bottle and Illy: Food & Beverage, Coffee);
+//   3. Qloo tags them as similar brands and their product categories overlap (Liquid Death's Iced Tea and
+//      Voodoo Ranger's Hard Tea);
+//   4. for a place: its category is the brand's own business (a coffee shop for a café chain).
+const BROAD = new Set(['retail', 'ecommerce', 'e-commerce', 'sustainability', 'consumer packaged goods', 'technology', 'design', 'other']);
+const FILLER = new Set(['and', 'the', 'for', 'other', 'general', 'alternative', 'product', 'good', 'accessory', 'equipment', 'service', 'based', 'ready',
+  'supply', 'store', 'shop', 'stand', 'bar', 'house', 'place', 'food', 'care', 'home', 'personal', 'gear', 'management', 'brand', 'item', 'online']);
+const stem = (w) => (w.endsWith('ies') && w.length > 4 ? `${w.slice(0, -3)}y` : w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
+const wordsOf = (s) => new Set(fold(s).split(/[^a-z0-9]+/).map(stem).filter((w) => w.length > 2 && !FILLER.has(w)));
+const lower = (s) => fold(s).trim();
+// First pair (a from A, b from B) of labels that share a meaningful word.
+function overlapPair(A = [], B = []) {
+  for (const a of A) {
+    const wa = wordsOf(a);
+    const b = B.find((x) => [...wordsOf(x)].some((w) => wa.has(w)));
+    if (b) return [a, b];
+  }
+  return [];
+}
+
+export function competitorCheck(brand, cand) {
+  const B = brand?.profile;
+  if (!B || !cand?.name) return null;
+  if ((brand.id && cand.id && cand.id === brand.id) || normName(cand.name) === normName(brand.name)) return null;
+  const C = cand.profile || {};
+  const lists = (list, name) => (list || []).some((n) => matchName(n, name));
+  if (lists(B.competitors, cand.name)) return { rule: 'qloo_competitor', reason: `Qloo lists it as a competitor of ${brand.name}` };
+  if (lists(C.competitors, brand.name)) return { rule: 'qloo_competitor', reason: `Qloo lists ${brand.name} as its competitor` };
+  const industries = (B.industry || []).filter((i) => !BROAD.has(lower(i)));
+  if (cand.type === 'place') {
+    const [ind, cat] = overlapPair(industries, C.category);
+    return ind ? { rule: 'same_business', reason: `Its Qloo category (${cat}) is ${brand.name}'s own business (${ind})` } : null;
+  }
+  const ind = industries.find((i) => (C.industry || []).some((j) => lower(j) === lower(i)));
+  const cat = (B.category || []).find((c) => (C.category || []).some((d) => lower(d) === lower(c)));
+  if (ind && cat) return { rule: 'same_category', reason: `Same Qloo industry (${ind}) and product category (${cat}) as ${brand.name}` };
+  if (lists(B.similar, cand.name) || lists(C.similar, brand.name)) {
+    const [a, b] = overlapPair(B.category, C.category);
+    if (a) return { rule: 'similar_brand', reason: `Qloo tags it as similar to ${brand.name} and the products overlap (${b} / ${a})` };
+  }
+  return null;
+}
+
+// Splits Qloo results into usable candidates and direct competitors (each with its reason).
+export function splitCompetitors(brand, results = []) {
+  const kept = [];
+  const skipped = [];
+  for (const e of results) {
+    const hit = competitorCheck(brand, e);
+    if (hit) skipped.push({ name: e.name, id: e.id || null, domain: e.type || null, affinity: e.affinity ?? null, rule: hit.rule, reason: hit.reason });
+    else kept.push(e);
+  }
+  return { kept, skipped };
+}
+
+// Server check of a submitted (already verified) brief: partners that are direct competitors are removed and
+// listed with the reason, next to the candidates skipped earlier. `removed` tells the agent what to replace.
+export function screenBrief(brief, brand, aff = {}, skipped = []) {
+  const byId = new Map(Object.values(aff).flat().filter((e) => e && e.id).map((e) => [e.id, e]));
+  const keep = [];
+  const removed = [];
+  for (const p of brief?.partnerships || []) {
+    const ent = (p.evidence?.id && byId.get(p.evidence.id)) || { name: p.partner, type: p.domain };
+    const hit = competitorCheck(brand, ent);
+    if (hit) removed.push({ name: ent.name || p.partner, id: ent.id || null, domain: ent.type || p.domain || null, affinity: ent.affinity ?? null, rule: hit.rule, reason: hit.reason, proposed: true });
+    else keep.push(p);
+  }
+  const out = { ...brief, partnerships: keep };
+  out.provenance = { ...(brief?.provenance || {}), partners_verified: keep.filter((p) => p.evidence).length, partners_total: keep.length };
+  const seen = new Set();
+  // Proposed-then-removed partners first, then the candidates skipped before drafting, strongest first.
+  out.skipped_competitors = [...removed, ...skipped].sort((a, b) => (b.proposed ? 1 : 0) - (a.proposed ? 1 : 0) || (b.affinity ?? 0) - (a.affinity ?? 0)).filter((s) => {
+    const k = s.id || normName(s.name);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).slice(0, 12);
+  return { brief: out, removed };
+}
+
 const avg = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
 
 // Side-by-side numbers for the "With Qloo vs LLM only" panel. Both columns are scored by Qloo for the
@@ -116,7 +200,7 @@ const prune = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !=
 
 // Smaller event streams for recordings (images kept) and permalinks (no images, fewer cells).
 export function compactEvents(events, { cells = 300, perDomain = 8, images = true } = {}) {
-  const ent = (e) => prune({ id: e.id, name: e.name, type: e.type, affinity: e.affinity, popularity: e.popularity, image: images ? e.image : null, tags: e.tags, address: e.address, lat: r(e.lat, 5), lng: r(e.lng, 5) });
+  const ent = (e) => prune({ id: e.id, name: e.name, type: e.type, affinity: e.affinity, popularity: e.popularity, image: images ? e.image : null, tags: e.tags, address: e.address, competitor: e.competitor, lat: r(e.lat, 5), lng: r(e.lng, 5) });
   return (events || []).map(({ type, data }) => {
     if (type === 'entities') return { type, data: { ...data, results: (data.results || []).slice(0, 3).map(ent) } };
     if (type === 'affinities') return { type, data: { ...data, results: (data.results || []).slice(0, perDomain).map(ent) } };

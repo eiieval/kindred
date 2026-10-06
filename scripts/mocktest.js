@@ -24,6 +24,14 @@ const p0 = brief.partnerships?.[0] || {};
 expect('brief partners are verified against Qloo results', brief.provenance?.partners_verified === brief.partnerships?.length && p0.evidence?.id === 'mock-artist-0');
 expect("affinity shown is Qloo's, the model's own number is kept apart", p0.affinity === 0.99 && p0.model_affinity === 0.95);
 
+// 1c. Direct competitors: withheld by Qloo tags, and a rival the model still proposes is sent back once.
+const comp = events.find((e) => e.type === 'competitors')?.data;
+const guard = events.find((e) => e.type === 'guardrail')?.data;
+expect('competitor filter skips rivals by Qloo tags before drafting', comp?.skipped?.map((x) => x.rule).join() === 'qloo_competitor,same_category');
+expect('the taste graph flags them; the model only sees them as excluded', events.find((e) => e.type === 'affinities' && e.data.domain === 'brand')?.data.results.filter((r) => r.competitor).length === 2);
+expect('guardrail rejects a proposed rival, the model revises, the brief has no rivals', guard?.rejected?.[0]?.name === 'Demo brand 2' && !brief.partnerships.some((p) => p.partner === 'Demo brand 2') && brief.partnerships.some((p) => p.partner === 'Demo brand 1'));
+expect('the brief lists what was skipped and why', brief.skipped_competitors?.[0]?.proposed === true && brief.skipped_competitors.every((x) => x.reason));
+
 // 1a. Provenance: the stream carries the run's inputs, model turns and the redacted request of every Qloo call.
 const affEvents = events.filter((e) => e.type === 'affinities');
 expect('stream includes run metadata and model turns', types.includes('meta') && types.filter((t) => t === 'model_turn').length >= 2);

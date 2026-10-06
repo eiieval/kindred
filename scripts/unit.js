@@ -2,7 +2,10 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { brotliDecompressSync } from 'node:zlib';
-import { matchName, sameName, verifyBrief, compareSummary, compactEvents, brandIdsOf } from '../public/js/core.js';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { matchName, sameName, verifyBrief, compareSummary, compactEvents, brandIdsOf, competitorCheck, splitCompetitors, screenBrief } from '../public/js/core.js';
+import { profileOf } from '../lib/qloo.js';
 import { parsePicks, toDomain } from '../lib/baseline.js';
 import { encodeShare, decodeShare, sanitizeEvents } from '../public/js/share.js';
 
@@ -52,6 +55,35 @@ expect('overlap and non-obvious picks', s.overlap === 1 && s.non_obvious === 2);
 expect('averages only use scored picks', Math.abs(s.llm_avg - 0.887) < 1e-9 && Math.abs(s.kindred_avg - 0.9665) < 1e-9 && s.llm_scored === 2);
 expect('unsupported picks are counted by reason', s.llm_not_returned === 1 && s.llm_not_found === 1);
 
+// 3b. Direct competitors, decided by Qloo's own tags (fixtures copied from real Qloo entities, trimmed).
+const T = (kind, ...names) => names.map((name) => ({ type: `urn:tag:${kind}:qloo`, name }));
+const ent = (name, type, ...tags) => ({ id: name, name, type, affinity: 0.9, profile: profileOf(tags.flat()) });
+const patagonia = ent('Patagonia', 'brand', T('industry', 'Fashion & Apparel', 'Outdoor Equipment'), T('product_category', 'Outerwear', 'Sportswear', 'Outdoor Gear'), T('competitor_brand', "Arc'teryx", 'The North Face'), T('similar_brand', 'Peak Design'));
+const liquidDeath = ent('Liquid Death', 'brand', T('industry', 'Food & Beverage', 'Sustainability'), T('product_category', 'Beverages', 'Water', 'Sparkling Water', 'Iced Tea'), T('competitor_brand', 'Perrier', 'LaCroix'));
+const oatly = ent('Oatly', 'brand', T('industry', 'Food & Beverage', 'Consumer Packaged Goods'), T('product_category', 'Beverages', 'Dairy Alternatives', 'Snacks'), T('similar_brand', 'Beyond Meat'));
+const blueBottle = ent('Blue Bottle Coffee', 'brand', T('industry', 'Food & Beverage', 'Retail', 'Coffee Roasting', 'Café Management'), T('product_category', 'Coffee'));
+expect('profileOf keeps only industry, category, competitor and similar tags', JSON.stringify(profileOf([...T('industry', 'A'), ...T('emotional_tone', 'Calm'), { type: 'urn:tag:category:place', name: 'Cafe' }])) === '{"industry":["A"],"category":["Cafe"]}' && profileOf([{ name: 'demo' }]) === null);
+expect("Qloo's competitor tags exclude a rival, in either direction", competitorCheck(patagonia, ent("Arc'teryx", 'brand'))?.rule === 'qloo_competitor'
+  && /Qloo lists Patagonia as its competitor/.test(competitorCheck(patagonia, ent('Fjällräven', 'brand', T('competitor_brand', 'Patagonia', 'Mammut')))?.reason));
+expect('same industry and product category is a rival (Illy for Blue Bottle)', competitorCheck(blueBottle, ent('Illy Coffee', 'brand', T('industry', 'Food & Beverage'), T('product_category', 'Coffee', 'Coffee Machines')))?.rule === 'same_category');
+expect('a Qloo "similar brand" with overlapping products is a rival (Voodoo Ranger for Liquid Death)', /Hard Tea \/ Iced Tea/.test(competitorCheck(liquidDeath, ent('Voodoo Ranger', 'brand', T('industry', 'Food & Beverage', 'Alcoholic Beverages'), T('product_category', 'Beer', 'Hard Tea'), T('similar_brand', 'Liquid Death')))?.reason || ''));
+expect('complementary brands stay: similar but different products, or no shared category', competitorCheck(oatly, ent('Moving Mountains Foods', 'brand', T('industry', 'Food & Beverage'), T('product_category', 'Plant-Based Meat'), T('similar_brand', 'Oatly'))) === null
+  && competitorCheck(patagonia, ent('GoPro', 'brand', T('industry', 'Consumer Electronics'), T('competitor_brand', 'DJI'))) === null
+  && competitorCheck(patagonia, ent('Peak Design', 'brand', T('industry', 'Consumer Goods'), T('product_category', 'Camera Bags'))) === null);
+expect('a broad shared industry alone is not rivalry (Retail)', competitorCheck(blueBottle, ent('Warby Parker', 'brand', T('industry', 'Retail', 'Eye Care'), T('product_category', 'Eyewear'))) === null);
+expect("a place in the brand's own business is a rival (coffee shop for a café chain), others stay", competitorCheck(blueBottle, { name: 'Fuglen Tokyo', type: 'place', profile: { category: ['Coffee stand', 'Cafe'] } })?.rule === 'same_business'
+  && competitorCheck(oatly, { name: 'Cafe X', type: 'place', profile: { category: ['Cafe', 'Coffee shop'] } }) === null
+  && competitorCheck(liquidDeath, { name: 'Mohawk', type: 'place', profile: { category: ['Live music venue', 'Bar'] } }) === null);
+expect('no brand profile, or the brand itself: nothing is excluded', competitorCheck({ name: 'Unknown' }, ent("Arc'teryx", 'brand')) === null && competitorCheck(patagonia, ent('Patagonia', 'brand')) === null);
+const split = splitCompetitors(patagonia, [ent('The North Face', 'brand'), ent('GoPro', 'brand')]);
+expect('splitCompetitors keeps partners and explains each skip', split.kept.length === 1 && split.kept[0].name === 'GoPro' && split.skipped[0].name === 'The North Face' && /competitor of Patagonia/.test(split.skipped[0].reason));
+const screenAff = { brand: [{ ...ent("Arc'teryx", 'brand'), affinity: 0.96 }, { ...ent('GoPro', 'brand'), affinity: 0.958 }], podcast: [{ id: 'P', name: 'The Rich Roll Podcast', affinity: 0.975 }] };
+const draft = verifyBrief({ partnerships: [{ partner: 'GoPro', domain: 'brand' }, { partner: "Arc'teryx", domain: 'brand' }, { partner: 'The North Face', domain: 'brand' }, { partner: 'The Rich Roll Podcast', domain: 'podcast' }] }, screenAff);
+const screened = screenBrief(draft, patagonia, screenAff, [{ name: 'Mammut', id: 'M', affinity: 0.95, reason: 'r' }, { name: "Arc'teryx", id: "Arc'teryx", affinity: 0.96, reason: 'dup' }]);
+expect('screenBrief removes proposed rivals (verified or not) and recounts provenance', screened.removed.map((x) => x.name).join() === "Arc'teryx,The North Face" && screened.brief.partnerships.map((p) => p.partner).join() === 'GoPro,The Rich Roll Podcast'
+  && screened.brief.provenance.partners_total === 2 && screened.brief.provenance.partners_verified === 2);
+expect('skipped list: proposed first, then by affinity, no duplicates', screened.brief.skipped_competitors.map((x) => `${x.name}${x.proposed ? '*' : ''}`).join() === "Arc'teryx*,The North Face*,Mammut");
+
 // 4. The LLM-only answer is parsed defensively.
 const picks = parsePicks('Sure! ```json\n{"partners":[{"partner":"Coldplay","domain":"Music artist","why":"big"},{"partner":"","domain":"x"},{"partner":"Succession","domain":"TV series"}],"neighbourhoods":["Soho"]}\n```');
 expect('parsePicks extracts JSON from prose and fences', picks.partners.length === 2 && picks.partners[0].domain === 'artist' && picks.partners[1].domain === 'tv_show' && picks.neighbourhoods[0] === 'Soho');
@@ -80,6 +112,8 @@ const back = await decodeShare(token);
 expect('share link round-trips the brief and drops remote images', /^z1[.]/.test(token) && back?.find((e) => e.type === 'brief')?.data.partnerships.length === 3 && !JSON.stringify(back).includes('tracker.example'));
 expect('damaged links decode to null', (await decodeShare('z1.@@@')) === null && (await decodeShare('z1.AAAA')) === null && (await decodeShare('x'.repeat(10))) === null);
 const hostile = sanitizeEvents([{ type: 'brief', data: { partnerships: 'x', activation: 5, provenance: { partners_total: '<b>' } } }, { type: 'evil', data: {} }, { type: 'heatmap', data: { cells: [{ lat: 'x', lng: 1 }, { lat: 1, lng: 2, affinity: '9' }] } }]);
+const skipLink = sanitizeEvents([{ type: 'brief', data: { skipped_competitors: [{ name: { x: 1 }, affinity: '9', proposed: 'yes' }] } }, { type: 'competitors', data: { skipped: 'x' } }]);
+expect('competitor notes in links are reshaped to safe types', skipLink[0].data.skipped_competitors[0].name === '[object Object]' && skipLink[0].data.skipped_competitors[0].affinity === null && skipLink[0].data.skipped_competitors[0].proposed === false && Array.isArray(skipLink[1].data.skipped));
 expect('hostile link content is reshaped to safe types', hostile.length === 2 && Array.isArray(hostile[0].data.partnerships) && hostile[0].data.provenance.partners_total === 0 && hostile[1].data.cells.length === 1 && hostile[1].data.cells[0].affinity === null);
 
 // 7. Every recorded example is small and carries the brief and the LLM-only comparison.
@@ -114,6 +148,9 @@ expect('fonts are valid WOFF2 whose name table credits The Inter Project Authors
 expect('OFL licence ships with the font', /SIL Open Font License, Version 1\.1/.test(read('public/vendor/inter/OFL.txt')));
 const csp = JSON.parse(read('vercel.json')).headers[0].headers.find((h) => h.key === 'Content-Security-Policy').value;
 expect("no Google Fonts in the page or the CSP, font-src 'self'", !/googleapis|gstatic/.test(read('public/index.html') + csp + read('public/styles.css')) && /font-src 'self'/.test(csp));
+
+// 9. Browser scripts parse (a stray quote in a template breaks the whole page, and no other check loads app.js).
+expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/js/share.js'].every((p) => spawnSync(process.execPath, ['--check', fileURLToPath(new URL(p, root))]).status === 0));
 
 console.log(failed ? `${failed} check(s) failed` : 'all unit checks passed');
 process.exit(failed ? 1 : 0);

@@ -88,6 +88,8 @@ function handle(ev) {
   } else if (type === 'heatmap') { state.heat = data; plotHeatmap(data); }
   else if (type === 'demographics') { state.demo = data; trace('✓', 'Audience profile ready', 'text-emerald-300/80'); }
   else if (type === 'tool_error') trace('⚠️', `${esc(data.name)}: ${esc(data.error)}`, 'text-amber-300/90');
+  else if (type === 'competitors') trace('🚫', `Skipped ${(data.skipped || []).length} direct competitor${(data.skipped || []).length === 1 ? '' : 's'} by Qloo tags: ${esc((data.skipped || []).slice(0, 3).map((x) => x.name).join(', '))}${(data.skipped || []).length > 3 ? '…' : ''}`, 'text-slate-400');
+  else if (type === 'guardrail') trace('🛡️', `Server check rejected ${esc((data.rejected || []).map((x) => x.name).join(', '))} as a direct competitor; the model revises the brief`, 'text-amber-300/90');
   else if (type === 'brief') renderBrief(data);
   else if (type === 'baseline') { state.baseline = data; renderCompare(); renderHow(); }
   else if (type === 'error') { trace('⛔', esc(data.message), 'text-rose-300'); setBusy(false); showFallback(data); }
@@ -104,8 +106,9 @@ function card(e) {
     ? `<img src="${esc(e.image)}" alt="" loading="lazy" class="h-28 w-full object-cover rounded-lg">`
     : `<div class="h-28 w-full rounded-lg bg-gradient-to-br from-fuchsia-500/30 to-amber-400/20 grid place-items-center text-3xl font-bold text-white/70">${esc((e.name || '?')[0])}</div>`;
   const w = Math.round((e.affinity ?? 0) * 100);
-  return `<div class="rounded-xl bg-white/[.03] border border-white/10 p-2">${img}
+  return `<div class="rounded-xl bg-white/[.03] border border-white/10 p-2${e.competitor ? ' opacity-60' : ''}">${img}
     <div class="mt-2 text-sm font-medium leading-tight">${esc(e.name)}</div>
+    ${e.competitor ? `<div class="mt-1"><span class="pill bg-rose-400/10 text-rose-200" title="${esc(e.competitor)}">Direct competitor · skipped</span></div>` : ''}
     <div class="mt-2 h-1.5 rounded bg-white/10"><div class="h-1.5 rounded bg-gradient-to-r from-fuchsia-400 to-amber-300" style="width:${w}%"></div></div>
     <div class="mt-1 flex justify-between text-[11px] text-slate-400"><span>affinity</span><span>${pct(e.affinity)}</span></div>
     ${e.tags?.length ? `<div class="mt-1 text-[11px] text-slate-500 truncate">${esc(e.tags.join(' · '))}</div>` : ''}</div>`;
@@ -145,6 +148,7 @@ function toMarkdown(b) {
   return [
     `# Kindred partnership brief: ${i.brand}${i.market ? ` in ${i.market}` : ''}`, '', `**${b.headline || ''}**`, '', b.audience_summary || '', '', '## Partnerships',
     ...(b.partnerships || []).map((p) => `- **${p.partner}** (${p.domain}${p.evidence ? `, Qloo affinity ${pct(p.affinity)}, entity ${p.evidence.id}` : ', not verified in Qloo results'}): ${p.concept}\n  - Why (AI interpretation): ${p.why}`),
+    ...((b.skipped_competitors || []).length ? ['', '## Skipped as direct competitors (Qloo tags)', ...b.skipped_competitors.map((x) => `- ${x.name}${typeof x.affinity === 'number' ? ` (affinity ${pct(x.affinity)})` : ''}: ${x.reason}${x.proposed ? ' (proposed by the model, removed by the server check)' : ''}`)] : []),
     '', `## Activation${A.city ? ` in ${A.city}` : ''}`, A.plan || '', ...(A.venue_evidence || (A.venues || []).map((v) => ({ name: v }))).map((v) => `- ${v.name}${v.evidence ? ` (Qloo venue, affinity ${pct(v.evidence.affinity)})` : ''}`),
     '', '## Messaging themes', ...(b.messaging_themes || []).map((t) => `- ${t}`),
     ...((b.watch_outs || []).length ? ['', '## Watch-outs', ...b.watch_outs.map((w) => `- ${w}`)] : []),
@@ -192,6 +196,12 @@ function renderBrief(raw) {
       <p class="mt-1.5 text-sm text-slate-200">${esc(p.concept)}</p>
       <p class="mt-2 text-xs text-slate-400">${esc(p.why)}</p></div>`).join('');
   const venues = A.venue_evidence || (A.venues || []).map((v) => ({ name: v, evidence: null }));
+  const skipped = b.skipped_competitors || [];
+  const skipNote = skipped.length ? `<div class="mt-3 rounded-lg border border-white/10 bg-white/[.02] px-3 py-2.5 text-xs text-slate-400">
+      <div class="flex flex-wrap items-center gap-2"><span class="font-medium text-slate-200">Skipped as direct competitors</span>${QTAG}<span class="text-slate-500">high affinity inside ${esc(state.input.brand)}'s own category means a rival, not a partner</span></div>
+      <ul class="mt-1.5 space-y-1">${skipped.slice(0, 5).map((x) => `<li><b class="font-medium text-slate-300">${esc(x.name)}</b>${typeof x.affinity === 'number' ? ` <span class="tabular-nums">${pct(x.affinity)}</span>` : ''} · ${esc(x.reason)}${x.proposed ? ' · <span class="text-amber-200/90">proposed by the model, removed by the server check</span>' : ''}</li>`).join('')}</ul>
+      ${skipped.length > 5 ? `<p class="mt-1 text-slate-500">Also skipped: ${esc(skipped.slice(5).map((x) => x.name).join(', '))}.</p>` : ''}
+    </div>` : '';
   $('#brief').innerHTML = `
     <div class="flex flex-wrap items-start gap-3">
       <div class="flex-1 min-w-[240px]">
@@ -211,6 +221,7 @@ function renderBrief(raw) {
       <span class="sm:ml-auto">Checked: ${P.partners_verified ?? 0}/${P.partners_total ?? 0} partners and ${P.venues_verified ?? 0}/${P.venues_total ?? 0} venues match Qloo results${P.corrected ? ` · ${P.corrected} ${P.corrected === 1 ? 'affinity' : 'affinities'} corrected to Qloo's value` : ''}</span>
     </div>
     <div class="mt-4 grid gap-3 md:grid-cols-2">${partners}</div>
+    ${skipNote}
     <div class="mt-5 grid gap-4 ${demoCard(state.demo) ? 'lg:grid-cols-[1.3fr_1fr_1fr]' : 'md:grid-cols-[1.4fr_1fr]'}">
       <div class="rounded-xl border border-white/10 p-4">
         <div class="flex items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400">Activation${A.city ? ` · ${esc(A.city)}` : ''}</span><span class="ml-auto">${AITAG}</span></div>
@@ -297,6 +308,8 @@ function howSteps() {
     else if (type === 'heatmap') step(`${QTAG} <b>Heatmap</b> of ${esc(data.location)} → ${data.total_cells ?? data.cells?.length ?? 0} cells${data.total_cells > (data.cells?.length || 0) ? ` (map shows the ${data.cells.length} warmest)` : ''}${(data.top || []).some((t) => t.area) ? `; hotspots named via OpenStreetMap: ${esc([...new Set(data.top.map((t) => t.area).filter(Boolean))].join(', '))}` : ''}`, data.request ? code(data.request) : '');
     else if (type === 'demographics') step(`${QTAG} <b>Audience profile</b> → ${data.unavailable ? 'unavailable' : 'age and gender skew'}`, data.request ? code(data.request) : '');
     else if (type === 'tool_error') step(`⚠️ <b>${esc(data.name)}</b> failed: ${esc(data.error)}`);
+    else if (type === 'competitors') step(`${QTAG} <b>Competitor filter</b> on ${esc(LABEL[data.domain] || data.domain)} → withheld from the model: ${esc((data.skipped || []).map((x) => `${x.name} (${x.reason})`).join('; '))}`, '<div class="mt-1 text-slate-500">Rules use Qloo&#39;s own brand tags: listed competitors (either direction), shared industry and product category, or a Qloo "similar brand" with overlapping products.</div>');
+    else if (type === 'guardrail') step(`🛡️ <b>Server check</b> → rejected ${esc((data.rejected || []).map((x) => `${x.name} (${x.reason})`).join('; '))}; the model was asked once to replace it`);
     else if (type === 'brief') {
       const P = data.provenance || state.brief?.provenance || {};
       step(`✓ <b>Server check</b> → ${P.partners_verified ?? '?'}/${P.partners_total ?? '?'} partners and ${P.venues_verified ?? '?'}/${P.venues_total ?? '?'} venues matched to Qloo results${P.corrected ? `; ${P.corrected} model-quoted ${P.corrected === 1 ? 'affinity' : 'affinities'} replaced by Qloo's value` : ''}`);
