@@ -273,6 +273,9 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
     && /bg-emerald-400\/10 text-emerald-200/.test(appSrc) && /bg-sky-400\/10 text-sky-200/.test(appSrc));
   const css = read('public/styles.css');
   expect('the stylesheet was rebuilt with the chip colours', ['bg-emerald-400\\/10', 'text-emerald-200', 'bg-sky-400\\/10', 'text-sky-200', 'text-sky-300\\/90', 'text-emerald-300\\/90'].every((c) => css.includes(`.${c}`)));
+  expect('brief header: on desktop the headline and summary span the full width, the buttons sit at the top right (classes compiled)',
+    /md:grid-cols-\[1fr_auto\]/.test(appSrc) && /md:col-span-2">\$\{esc\(b\.headline\)\}/.test(appSrc) && /md:col-start-2 md:row-start-1/.test(appSrc)
+    && ['md\\:grid-cols-\\[1fr_auto\\]', 'md\\:col-span-2', 'md\\:col-start-2', 'md\\:row-start-1'].every((c) => css.includes(`.${c}`)));
 }
 
 console.log(failed ? `${failed} check(s) failed` : 'all unit checks passed');

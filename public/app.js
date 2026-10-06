@@ -224,13 +224,11 @@ function renderBrief(raw) {
       ${skipped.length > 5 ? `<p class="mt-1 text-slate-500">Also skipped: ${esc(skipped.slice(5).map((x) => x.name).join(', '))}.</p>` : ''}
     </div>` : '';
   $('#brief').innerHTML = `
-    <div class="flex flex-wrap items-start gap-3">
-      <div class="flex-1 min-w-[240px]">
-        <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wider text-fuchsia-300/80">Partnership brief · ${esc(state.input.brand)}${state.input.market ? ` · ${esc(state.input.market)}` : ''} ${AITAG}</div>
-        <h2 class="mt-1 text-2xl font-bold leading-snug">${esc(b.headline)}</h2>
-        <p class="mt-2 text-slate-300">${esc(b.audience_summary)}</p>
-      </div>
-      <div class="flex flex-wrap gap-2">
+    <div class="grid grid-cols-1 gap-x-3 md:grid-cols-[1fr_auto]">
+      <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wider text-fuchsia-300/80">Partnership brief · ${esc(state.input.brand)}${state.input.market ? ` · ${esc(state.input.market)}` : ''} ${AITAG}</div>
+      <h2 class="mt-1 text-2xl font-bold leading-snug md:col-span-2">${esc(b.headline)}</h2>
+      <p class="mt-2 text-slate-300 md:col-span-2">${esc(b.audience_summary)}</p>
+      <div class="mt-3 flex flex-wrap gap-2 md:col-start-2 md:row-start-1 md:mt-0">
         <button id="share" class="text-xs rounded-lg border border-fuchsia-400/40 px-3 py-2 hover:border-fuchsia-300 hidden">Copy share link</button>
         <button id="copy" class="text-xs rounded-lg border border-white/15 px-3 py-2 hover:border-white/40">Copy as Markdown</button>
         <button id="dl" class="text-xs rounded-lg bg-white text-black px-3 py-2 font-medium">Download .md</button>
