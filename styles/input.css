@@ -15,6 +15,9 @@ select.field option { background: #0b0d12; }
 /* Dark map from standard OpenStreetMap tiles (keyless), matching the UI theme. */
 .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
 .pill { display: inline-block; font-size: .72rem; line-height: 1.1rem; border-radius: 9999px; padding: 0 .5rem; white-space: nowrap; }
+/* Phones: long names and status pills wrap inside their card instead of widening it (checked at 320-390 px). */
+#out { overflow-wrap: anywhere; }
+@media (max-width: 639px) { .pill { white-space: normal; } }
 .stat { border-radius: .75rem; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.02); padding: .9rem 1rem; }
 .stat-k { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
 /* Provenance labels: Qloo data vs AI interpretation. */

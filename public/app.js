@@ -57,7 +57,9 @@ function trace(icon, html, cls = '') {
   const li = document.createElement('li');
   li.className = `flex gap-2 items-start ${cls}`;
   li.innerHTML = `<span class="w-5 shrink-0 text-center">${icon}</span><span class="text-slate-300">${html}</span>`;
-  $('#trace').appendChild(li);
+  const list = $('#trace');
+  list.appendChild(li);
+  list.scrollTop = list.scrollHeight;
 }
 
 function describe(name, a = {}) {
@@ -220,9 +222,9 @@ function renderBrief(raw) {
       <span>${AITAG} written by the model from that data; validate before acting</span>
       <span class="sm:ml-auto">Checked: ${P.partners_verified ?? 0}/${P.partners_total ?? 0} partners and ${P.venues_verified ?? 0}/${P.venues_total ?? 0} venues match Qloo results${P.corrected ? ` · ${P.corrected} ${P.corrected === 1 ? 'affinity' : 'affinities'} corrected to Qloo's value` : ''}</span>
     </div>
-    <div class="mt-4 grid gap-3 md:grid-cols-2">${partners}</div>
+    <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">${partners}</div>
     ${skipNote}
-    <div class="mt-5 grid gap-4 ${demoCard(state.demo) ? 'lg:grid-cols-[1.3fr_1fr_1fr]' : 'md:grid-cols-[1.4fr_1fr]'}">
+    <div class="mt-5 grid grid-cols-1 gap-4 ${demoCard(state.demo) ? 'lg:grid-cols-[1.3fr_1fr_1fr]' : 'md:grid-cols-[1.4fr_1fr]'}">
       <div class="rounded-xl border border-white/10 p-4">
         <div class="flex items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400">Activation${A.city ? ` · ${esc(A.city)}` : ''}</span><span class="ml-auto">${AITAG}</span></div>
         <p class="mt-2 text-sm text-slate-200">${esc(A.plan)}</p>
@@ -329,7 +331,7 @@ function renderHow() {
   el.classList.remove('hidden');
   el.innerHTML = `<details${open ? ' open' : ''}>
     <summary class="cursor-pointer select-none font-semibold">How this brief was built <span class="ml-1 text-xs font-normal text-slate-500">redacted request-to-result trace · data handling · limitations</span></summary>
-    <div class="mt-4 grid gap-5 lg:grid-cols-[1.6fr_1fr]">
+    <div class="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
       <ol class="space-y-2 text-xs text-slate-400">${howSteps()}</ol>
       <div class="space-y-4 text-xs text-slate-400">
         <div><div class="text-slate-200 font-medium">Credentials</div><p class="mt-1">Every Qloo and model call runs on the server. The Qloo key travels only in a request header from the server; it never reaches the browser, this trace, the recordings or the logs.</p></div>
@@ -385,7 +387,7 @@ function renderCompare() {
   el.classList.remove('hidden');
   el.innerHTML = `<div class="flex flex-wrap items-baseline gap-2"><h2 class="font-semibold">With Qloo vs LLM only</h2>
       <span class="text-xs text-slate-500">same model · same brand, market and goal · both scored by the same Qloo query</span></div>
-    <div class="mt-4 grid gap-3 sm:grid-cols-3">
+    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
       <div class="stat"><div class="stat-k">Average Qloo affinity of the picks</div>
         <div class="mt-1 text-2xl font-bold">${s.kindred_avg !== null ? pct(s.kindred_avg) : 'n/a'} <span class="text-sm font-normal text-slate-400">Kindred</span></div>
         <div class="text-sm text-slate-400">vs ${s.llm_avg !== null ? pct(s.llm_avg) : 'n/a'} LLM only <span class="text-slate-500">(${s.llm_scored} of ${s.llm_only.length} scored)</span></div></div>
@@ -396,7 +398,7 @@ function renderCompare() {
         <div class="mt-1 text-2xl font-bold">${unsupported} <span class="text-sm font-normal text-slate-400">of ${s.llm_only.length}</span></div>
         <div class="text-sm text-slate-400">no affinity for this audience in ${esc(market)}, or not found in Qloo</div></div>
     </div>
-    <div class="mt-4 grid gap-4 md:grid-cols-2">
+    <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
       <div class="rounded-xl border border-dashed border-white/15 p-4">
         <div class="text-xs uppercase tracking-wide text-slate-400">LLM only · no Qloo data</div>
         <p class="mt-1 text-xs text-slate-500">${esc(b.model || 'The model')} answered from general knowledge, with no tools.</p>
