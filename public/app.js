@@ -380,7 +380,7 @@ function renderCompare() {
   const market = state.input.market || 'the market';
   const T = compareText(s, state.input.market, state.input.brand);
   const cityMarket = s.city?.market || state.input.market;
-  const cityLine = (status) => (cityLabel(status, cityMarket) ? `<span class="${status === 'present' ? 'text-emerald-300/80' : 'text-slate-500'}">City check: ${esc(cityLabel(status, cityMarket))}</span>` : '');
+  const cityLine = (status) => (cityLabel(status, cityMarket) ? `<span class="${status === 'present' ? 'text-emerald-300/80' : 'text-slate-500'}">City check: ${esc(cityLabel(status, cityMarket).replace(/^./, (c) => c.toLowerCase()))}</span>` : '');
   const areas = [...new Set((state.heat?.top || []).map((c) => c.area).filter(Boolean))];
   const llmRows = s.llm_only.map((p) => `<li class="rounded-lg border border-white/10 p-3">
       <div class="flex flex-wrap items-center gap-2"><span class="font-medium">${esc(p.partner)}</span><span class="text-[11px] uppercase tracking-wide text-slate-500">${esc(LABEL[p.domain] || p.domain)}</span>

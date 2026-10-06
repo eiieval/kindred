@@ -150,6 +150,9 @@ for (const ex of examples) {
   const brief = ev.find((e) => e.type === 'brief')?.data;
   const base = ev.find((e) => e.type === 'baseline')?.data;
   expect(`example ${ex.slug}: ${Math.round(text.length / 1024)} KB, brief + LLM-only comparison`, ok && text.length < 60000 && brief?.partnerships?.length && base?.llm_only?.length);
+  const cs = brief && base ? compareSummary(brief, base).city : null;
+  expect(`example ${ex.slug}: city check covers every Kindred pick and every LLM-only pick found in Qloo`, cs && cs.kindred_checked === brief.partnerships.filter((p) => p.evidence?.id).length
+    && cs.llm_checked === base.llm_only.length && base.requests.some((r) => /signal\.location\.query=/.test(r.request) && !/signal\.interests/.test(r.request)));
   const skippedNames = (brief?.skipped_competitors || []).map((x) => x.name);
   expect(`example ${ex.slug}: no partner is a skipped or known direct competitor`, !(brief?.partnerships || []).some((p) => [...skippedNames, ...(RIVALS[ex.slug] || [])].some((n) => matchName(n, p.partner))));
   const link = await encodeShare(ev);
