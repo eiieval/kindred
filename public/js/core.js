@@ -279,6 +279,28 @@ export function compactEvents(events, { cells = 300, perDomain = 8, images = tru
   });
 }
 
+const rad = (d) => (d * Math.PI) / 180;
+
+// Great-circle distance in km (haversine): plenty for deciding what is "near" a city centre.
+export function distanceKm(a, b) {
+  const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lng - a.lng) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// What the activation map frames. Qloo's heatmap cells can run across a whole region (Barcelona: Lleida to Girona), so
+// fitting all of them shows Catalonia, not the city. Frame the hotspots plus the cells within `km` of their centroid;
+// with fewer than two hotspots there is no centre to trust, so use the `fallback` warmest cells. Every cell is still
+// drawn: zooming out reveals them. Returns [{ lat, lng }].
+export function focusCells(cells = [], top = [], { km = 12, fallback = 40 } = {}) {
+  const ok = (p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng);
+  const pts = (Array.isArray(cells) ? cells : []).filter(ok);
+  const hot = (Array.isArray(top) ? top : []).filter(ok);
+  const xy = ({ lat, lng }) => ({ lat, lng });
+  if (hot.length < 2) return [...pts].sort((a, b) => (b.affinity ?? 0) - (a.affinity ?? 0)).slice(0, fallback).map(xy);
+  const centre = { lat: hot.reduce((s, p) => s + p.lat, 0) / hot.length, lng: hot.reduce((s, p) => s + p.lng, 0) / hot.length };
+  return [...hot, ...pts.filter((p) => distanceKm(p, centre) <= km)].map(xy);
+}
+
 // The three-step cover tour: which block each caption points at (ids that exist in index.html) and what it says.
 export function tourSteps(ex = {}) {
   const brand = String(ex.brand || 'this brand').slice(0, 80);

@@ -1,4 +1,4 @@
-import { tourSteps, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, brandIdsOf } from './js/core.js';
+import { tourSteps, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, brandIdsOf, focusCells } from './js/core.js';
 import { startTour, tourSeen } from './js/tour.js';
 import { encodeShare, decodeShare } from './js/share.js';
 
@@ -27,6 +27,7 @@ function ensureMap() {
   map = L.map('map').setView([40.4, -3.7], 3);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 }).addTo(map);
   layer = L.layerGroup().addTo(map);
+  map.createPane('venues').style.zIndex = 450; // venue dots stay above the heat cells whichever arrives first
   setTimeout(() => map.invalidateSize(), 60);
 }
 
@@ -137,15 +138,17 @@ function plotHeatmap({ location, cells = [], top = [] }) {
   if (!cells.length) { $('#mapnote').textContent = `No heatmap data for ${location}.`; return; }
   cells.forEach((c) => L.circleMarker([c.lat, c.lng], { radius: 5 + 12 * (c.affinity ?? 0), color: color(c.affinity), weight: 0, fillOpacity: 0.45 }).addTo(layer));
   top.forEach((c, i) => L.marker([c.lat, c.lng], { title: c.area || `Hotspot ${i + 1}` }).bindPopup(`<b>${esc(c.area || `Hotspot ${i + 1}`)}</b><br>Affinity ${pct(c.affinity)}`).addTo(layer));
-  map.fitBounds(L.latLngBounds(cells.map((c) => [c.lat, c.lng])).pad(0.1));
+  // City scale: frame the hotspots and the cells around them, not every cell of the region (the rest stay drawn).
+  const focus = focusCells(cells, top);
+  if (focus.length) map.fitBounds(L.latLngBounds(focus.map((c) => [c.lat, c.lng])).pad(0.25), { maxZoom: 13 });
   const names = [...new Set(top.map((c) => c.area).filter(Boolean))];
-  $('#mapnote').textContent = `Warmer = the audience over-indexes there (Qloo heatmap, ${location}). Pink dots: venues from Qloo.${names.length ? ` Top areas: ${names.join(', ')} (names from OpenStreetMap).` : ''}`;
+  $('#mapnote').textContent = `Warmer = the audience over-indexes there (Qloo heatmap, ${location}). Pink dots: venues from Qloo.${names.length ? ` Top areas: ${names.join(', ')} (names from OpenStreetMap).` : ''} Zoom out to see the whole region.`;
 }
 
 function plotVenues(list) {
   ensureMap();
   list.filter((v) => typeof v.lat === 'number' && typeof v.lng === 'number').forEach((v) => {
-    L.circleMarker([v.lat, v.lng], { radius: 6, color: '#fff', weight: 2, fillColor: '#e879f9', fillOpacity: 0.9 })
+    L.circleMarker([v.lat, v.lng], { pane: 'venues', radius: 6, color: '#fff', weight: 2, fillColor: '#e879f9', fillOpacity: 0.9 })
       .bindPopup(`<b>${esc(v.name)}</b><br>${esc(v.address || '')}<br>Affinity ${pct(v.affinity)}`).addTo(layer);
   });
 }

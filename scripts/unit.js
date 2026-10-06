@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { brotliDecompressSync } from 'node:zlib';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { tourSteps, matchName, sameName, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, compactEvents, brandIdsOf, competitorCheck, splitCompetitors, screenBrief } from '../public/js/core.js';
+import { tourSteps, matchName, sameName, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, compactEvents, brandIdsOf, competitorCheck, splitCompetitors, screenBrief, focusCells, distanceKm } from '../public/js/core.js';
 import { profileOf } from '../lib/qloo.js';
 import { parsePicks, toDomain } from '../lib/baseline.js';
 import { encodeShare, decodeShare, sanitizeEvents } from '../public/js/share.js';
@@ -218,6 +218,28 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
   expect('og.png is a 1200x630 PNG under 300 KB and icon-180.png is 180x180', og.ok && og.w === 1200 && og.h === 630 && og.kb < 300 && icon.ok && icon.w === 180 && icon.h === 180);
   expect('favicon.svg is an SVG with the brand gradient', read('public/favicon.svg').trimStart().startsWith('<svg') && /#d946ef/.test(read('public/favicon.svg')) && /#fbbf24/.test(read('public/favicon.svg')));
   expect("the strict CSP still covers the images (img-src 'self')", /img-src 'self'/.test(csp));
+}
+
+// 13. Map framing: the hotspots and the cells near them, never the whole region (Barcelona's cells ran from Lleida to Girona).
+{
+  const bcn = (i) => ({ lat: 41.38 + (i % 5) * 0.01, lng: 2.15 + (i % 7) * 0.01, affinity: 0.9 - i * 0.001 });
+  const girona = (i) => ({ lat: 41.98 + i * 0.01, lng: 2.82, affinity: 0.95 });
+  const cells = [...Array.from({ length: 30 }, (_, i) => bcn(i)), ...Array.from({ length: 10 }, (_, i) => girona(i))];
+  const hot = [{ lat: 41.39, lng: 2.17, affinity: 1, area: "l'Eixample" }, { lat: 41.405, lng: 2.15, affinity: 0.99, area: 'Gràcia' }];
+  const f = focusCells(cells, hot);
+  expect('focusCells frames the hotspots and the cells within 12 km, and leaves Girona out', f.length === 2 + 30 && f.every((p) => p.lat < 41.6) && f[0].lat === hot[0].lat && f[1].lng === hot[1].lng);
+  const warm = Array.from({ length: 60 }, (_, i) => ({ lat: 10 + i, lng: 20, affinity: 1 - i / 100 }));
+  const first40 = warm.slice(0, 40).map((p) => p.lat).join();
+  expect('without two hotspots it frames the 40 warmest cells', focusCells(warm, []).length === 40 && focusCells(warm, [hot[0]]).length === 40 && focusCells([...warm].reverse(), []).map((p) => p.lat).join() === first40);
+  expect('empty lists and broken coordinates give an empty frame', focusCells([], []).length === 0 && focusCells(undefined, undefined).length === 0 && focusCells([{ lat: 'x', lng: 1 }], [{ lat: NaN, lng: 1 }, hot[0]]).length === 0);
+  expect('distanceKm is a haversine distance (Barcelona to Girona is about 85 km)', Math.abs(distanceKm({ lat: 41.3874, lng: 2.1686 }, { lat: 41.9794, lng: 2.8214 }) - 85) < 4);
+  expect('the page frames that focus at city zoom and says how to see the rest', /focusCells\(cells, top\)/.test(appSrc) && /maxZoom: 13/.test(appSrc) && /pad\(0\.25\)/.test(appSrc) && /Zoom out to see the whole region\./.test(appSrc));
+  const spanKm = (ps) => distanceKm({ lat: Math.min(...ps.map((p) => p.lat)), lng: Math.min(...ps.map((p) => p.lng)) }, { lat: Math.max(...ps.map((p) => p.lat)), lng: Math.max(...ps.map((p) => p.lng)) });
+  for (const slug of ['patagonia-barcelona', 'liquid-death-austin', 'blue-bottle-tokyo']) {
+    const h = JSON.parse(read(`public/examples/${slug}.json`)).find((e) => e.type === 'heatmap').data;
+    const frame = spanKm(focusCells(h.cells, h.top));
+    expect(`example ${slug}: the map frame is city scale (${Math.round(frame)} km corner to corner; all cells: ${Math.round(spanKm(h.cells))} km)`, frame > 5 && frame < 40);
+  }
 }
 
 console.log(failed ? `${failed} check(s) failed` : 'all unit checks passed');
