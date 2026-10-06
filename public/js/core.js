@@ -166,21 +166,48 @@ const avg = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : nul
 
 // Side-by-side numbers for the "With Qloo vs LLM only" panel. Both columns are scored by Qloo for the
 // same audience and market; absent scores are reported as such, never imputed.
+// city: the non-circular check (is each pick present in Qloo's data for the city at all, city signal only).
 export function compareSummary(brief, baseline) {
-  const llm = (baseline?.llm_only || []).map((p) => ({ ...p, qloo: p.qloo || { status: 'not_found' } }));
-  const kindred = (brief?.partnerships || []).map((p) => ({ partner: p.partner, domain: p.domain, id: p.evidence?.id || null, affinity: p.evidence?.affinity ?? null }));
+  const C = baseline?.city && typeof baseline.city === 'object' ? baseline.city : null;
+  const present = C && C.present && typeof C.present === 'object' ? C.present : {};
+  const inList = (list, id) => Array.isArray(list) && list.includes(id);
+  const cityOf = (id, notInQloo) => {
+    if (!C) return null;
+    if (notInQloo) return 'not_in_qloo';
+    if (!id || inList(C.unchecked, id)) return 'unchecked';
+    if (Object.prototype.hasOwnProperty.call(present, id)) return 'present';
+    return inList(C.absent, id) ? 'absent' : 'unchecked';
+  };
+  const llm = (baseline?.llm_only || []).map((p) => {
+    const qloo = p.qloo || { status: 'not_found' };
+    return { ...p, qloo, city: cityOf(qloo.id, qloo.status === 'not_found') };
+  });
+  const kindred = (brief?.partnerships || []).map((p) => ({ partner: p.partner, domain: p.domain, id: p.evidence?.id || null, affinity: p.evidence?.affinity ?? null, city: cityOf(p.evidence?.id || null, false) }));
   const inLlm = (k) => llm.some((p) => (k.id && p.qloo.id && p.qloo.id === k.id) || sameName(p.partner, k.partner));
   const marked = kindred.map((k) => ({ ...k, also_llm: inLlm(k) }));
   const kScores = marked.map((k) => k.affinity).filter((a) => typeof a === 'number');
   const lScores = llm.filter((p) => p.qloo.status === 'scored' && typeof p.qloo.affinity === 'number').map((p) => p.qloo.affinity);
+  const count = (list, st) => list.filter((x) => x.city === st).length;
+  const notReturned = llm.filter((p) => p.qloo.status === 'not_returned').length;
+  const notFound = llm.filter((p) => p.qloo.status === 'not_found').length;
   return {
     kindred: marked,
     llm_only: llm,
+    // The plain finding: picks with no Qloo support for this audience in this market.
+    llm_unsupported: notReturned + notFound,
+    city: C ? {
+      market: String(C.market || ''),
+      llm_present: count(llm, 'present'),
+      llm_checked: llm.length - count(llm, 'unchecked'),
+      llm_not_in_qloo: count(llm, 'not_in_qloo'),
+      kindred_present: count(marked, 'present'),
+      kindred_checked: marked.length - count(marked, 'unchecked'),
+    } : null,
     kindred_avg: avg(kScores),
     llm_avg: avg(lScores),
     llm_scored: lScores.length,
-    llm_not_returned: llm.filter((p) => p.qloo.status === 'not_returned').length,
-    llm_not_found: llm.filter((p) => p.qloo.status === 'not_found').length,
+    llm_not_returned: notReturned,
+    llm_not_found: notFound,
     overlap: marked.filter((k) => k.also_llm).length,
     non_obvious: marked.filter((k) => !k.also_llm).length,
   };

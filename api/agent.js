@@ -1,6 +1,7 @@
 import { runAgent } from '../lib/agent.js';
 import { runBaseline } from '../lib/baseline.js';
 import { publicMessage, errorCode } from '../lib/errors.js';
+import { DOMAINS } from '../lib/qloo.js';
 
 // Input allow-lists: anything else falls back to a default instead of reaching the model.
 const GOALS = ['Brand partnership or co-branded collab', 'Pop-up activation', 'Music or event sponsorship', 'Creator or talent partnership', 'Podcast or media sponsorship'];
@@ -40,7 +41,8 @@ function json(res, status, data) {
 }
 
 // POST { brand, market, goal, age } -> Server-Sent Events stream of agent steps.
-// POST { mode: 'compare', brand, market, goal, age, brand_ids } -> JSON: the LLM-only baseline scored by Qloo.
+// POST { mode: 'compare', brand, market, goal, age, brand_ids, kindred } -> JSON: the LLM-only baseline scored by
+// Qloo, plus a city-only presence check of both columns (kindred: the brief's partners as [{ id, domain }]).
 // Both modes share the per-IP limit and the concurrency cap.
 export default async function handler(req, res) {
   const h = req.headers || {};
@@ -68,9 +70,10 @@ export default async function handler(req, res) {
   if (body.mode === 'compare') {
     const brandIds = (Array.isArray(body.brand_ids) ? body.brand_ids : []).map(String).filter((id) => QLOO_ID.test(id)).slice(0, 3);
     if (!brandIds.length) return deny(res, 400, 'brand_ids are required');
+    const kindredPicks = (Array.isArray(body.kindred) ? body.kindred : []).filter((k) => k && QLOO_ID.test(String(k.id)) && DOMAINS.includes(k.domain)).slice(0, 6).map((k) => ({ id: String(k.id), domain: k.domain }));
     running++;
     try {
-      return json(res, 200, { baseline: await runBaseline({ brand, market, goal, age, brandIds }) });
+      return json(res, 200, { baseline: await runBaseline({ brand, market, goal, age, brandIds, kindredPicks }) });
     } catch (e) {
       if (!e?.public) console.error('[compare]', e);
       return json(res, e?.status === 429 ? 429 : 502, { error: publicMessage(e), code: errorCode(e) });

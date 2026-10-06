@@ -59,6 +59,10 @@ export function sanitizeEvents(list) {
       data.llm_only = arr(data.llm_only, 8).map(obj).map((p) => ({ ...p, qloo: { ...obj(p.qloo), affinity: num(p.qloo?.affinity) } }));
       data.neighbourhoods = arr(data.neighbourhoods, 5).map(String);
       data.requests = arr(data.requests).map(obj);
+      if (data.city !== undefined && data.city !== null) {
+        const c = obj(data.city);
+        data.city = { market: String(c.market ?? ''), present: Object.fromEntries(Object.entries(obj(c.present)).slice(0, 20).map(([k, v]) => [String(k), num(v)])), absent: arr(c.absent).map(String), unchecked: arr(c.unchecked).map(String) };
+      }
     }
     if (ev.type === 'demographics') for (const k of ['age', 'gender']) if (data[k] !== undefined) data[k] = obj(data[k]);
     out.push({ type: ev.type, data });
