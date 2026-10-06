@@ -1,5 +1,7 @@
 // Offline unit checks of the pure logic (name matching, provenance, comparison, recordings). No keys needed.
 import { readFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { brotliDecompressSync } from 'node:zlib';
 import { matchName, sameName, verifyBrief, compareSummary, compactEvents, brandIdsOf } from '../public/js/core.js';
 import { parsePicks, toDomain } from '../lib/baseline.js';
 import { encodeShare, decodeShare, sanitizeEvents } from '../public/js/share.js';
@@ -93,6 +95,25 @@ for (const ex of examples) {
   const link = await encodeShare(ev);
   expect(`example ${ex.slug}: share link ${link.length} chars`, link.length < 9000);
 }
+
+// 8. Self-hosted font: files match recorded hashes, are real WOFF2 Inter, and no third-party font host remains.
+const sums = read('public/vendor/inter/SHA256SUMS').trim().split(/\r?\n/).map((l) => l.split(/\s+/));
+const hashesOk = sums.length === 3 && sums.every(([hash, file]) => createHash('sha256').update(readFileSync(new URL(`public/vendor/inter/${file}`, root))).digest('hex') === hash);
+expect('vendored Inter files match SHA256SUMS', hashesOk);
+const isInter = (file) => {
+  const b = readFileSync(new URL(`public/vendor/inter/${file}`, root));
+  if (b.toString('latin1', 0, 4) !== 'wOF2' || b.readUInt32BE(8) !== b.length) return false;
+  const size = b.readUInt32BE(20); // totalCompressedSize: the Brotli stream ends the file, padded to 4 bytes
+  const utf16 = (s) => Buffer.from([...s].flatMap((c) => [0, c.charCodeAt(0)]));
+  for (let pad = 0; pad < 4; pad++) {
+    try { return brotliDecompressSync(b.subarray(b.length - size - pad, b.length - pad)).includes(utf16('The Inter Project Authors')); } catch { /* try the next padding */ }
+  }
+  return false;
+};
+expect('fonts are valid WOFF2 whose name table credits The Inter Project Authors', isInter('inter-latin.woff2') && isInter('inter-latin-ext.woff2'));
+expect('OFL licence ships with the font', /SIL Open Font License, Version 1\.1/.test(read('public/vendor/inter/OFL.txt')));
+const csp = JSON.parse(read('vercel.json')).headers[0].headers.find((h) => h.key === 'Content-Security-Policy').value;
+expect("no Google Fonts in the page or the CSP, font-src 'self'", !/googleapis|gstatic/.test(read('public/index.html') + csp + read('public/styles.css')) && /font-src 'self'/.test(csp));
 
 console.log(failed ? `${failed} check(s) failed` : 'all unit checks passed');
 process.exit(failed ? 1 : 0);

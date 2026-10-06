@@ -7,7 +7,7 @@ import { loadEnv } from './lib/env.js';
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url));
 loadEnv();
 const { default: agent } = await import('./api/agent.js');
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.md': 'text/markdown' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.md': 'text/markdown', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8' };
 const port = Number(process.env.PORT) || 3000;
 // Same security headers as production, read from vercel.json.
 const cfg = JSON.parse(await readFile(new URL('./vercel.json', import.meta.url), 'utf8'));
