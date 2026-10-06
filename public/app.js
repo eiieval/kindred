@@ -381,7 +381,7 @@ function renderCompare() {
         <div class="text-sm text-slate-400">found through Qloo affinities</div></div>
       <div class="stat"><div class="stat-k">LLM-only picks Qloo could not support</div>
         <div class="mt-1 text-2xl font-bold">${unsupported} <span class="text-sm font-normal text-slate-400">of ${s.llm_only.length}</span></div>
-        <div class="text-sm text-slate-400">no affinity for this audience in ${esc(market)}, or not in Qloo</div></div>
+        <div class="text-sm text-slate-400">no affinity for this audience in ${esc(market)}, or not found in Qloo</div></div>
     </div>
     <div class="mt-4 grid gap-4 md:grid-cols-2">
       <div class="rounded-xl border border-dashed border-white/15 p-4">
