@@ -1,4 +1,4 @@
-import { verifyBrief, compareSummary, brandIdsOf } from './js/core.js';
+import { verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, brandIdsOf } from './js/core.js';
 import { encodeShare, decodeShare } from './js/share.js';
 
 const $ = (s) => document.querySelector(s);
@@ -317,7 +317,11 @@ function howSteps() {
       step(`✓ <b>Server check</b> → ${P.partners_verified ?? '?'}/${P.partners_total ?? '?'} partners and ${P.venues_verified ?? '?'}/${P.venues_total ?? '?'} venues matched to Qloo results${P.corrected ? `; ${P.corrected} model-quoted ${P.corrected === 1 ? 'affinity' : 'affinities'} replaced by Qloo's value` : ''}`);
     } else if (type === 'baseline') {
       step(`${AITAG} <b>LLM-only comparison</b> · ${esc(data.model || 'model')}, one call, no tools, no Qloo data → ${esc((data.llm_only || []).map((p) => p.partner).join(', '))}`);
-      step(`${QTAG} <b>Score the LLM-only picks</b> with the same audience query`, (data.requests || []).map((r) => `${code(r.request)}<div class="mt-0.5 text-slate-500">→ ${esc(r.result)}</div>`).join(''));
+      const isCity = (r) => /\/v2\/insights/.test(r.request) && !/signal\.interests/.test(r.request);
+      const reqs = (list) => list.map((r) => `${code(r.request)}<div class="mt-0.5 text-slate-500">→ ${esc(r.result)}</div>`).join('');
+      step(`${QTAG} <b>Score the LLM-only picks</b> with the same audience query`, reqs((data.requests || []).filter((r) => !isCity(r))));
+      const city = (data.requests || []).filter(isCity);
+      if (city.length) step(`${QTAG} <b>City check</b> of both columns · city signal only, no brand audience`, reqs(city));
     }
   }
   return out.join('');
@@ -374,30 +378,29 @@ function renderCompare() {
   }
   const s = compareSummary(state.brief, b);
   const market = state.input.market || 'the market';
+  const T = compareText(s, state.input.market, state.input.brand);
+  const cityMarket = s.city?.market || state.input.market;
+  const cityLine = (status) => (cityLabel(status, cityMarket) ? `<span class="${status === 'present' ? 'text-emerald-300/80' : 'text-slate-500'}">City check: ${esc(cityLabel(status, cityMarket))}</span>` : '');
   const areas = [...new Set((state.heat?.top || []).map((c) => c.area).filter(Boolean))];
   const llmRows = s.llm_only.map((p) => `<li class="rounded-lg border border-white/10 p-3">
       <div class="flex flex-wrap items-center gap-2"><span class="font-medium">${esc(p.partner)}</span><span class="text-[11px] uppercase tracking-wide text-slate-500">${esc(LABEL[p.domain] || p.domain)}</span>
       <span class="ml-auto">${(STATUS[p.qloo.status] || STATUS.not_found)(p)}</span></div>
-      ${p.why ? `<p class="mt-1 text-xs text-slate-400">${esc(p.why)}</p>` : ''}</li>`).join('');
+      ${p.why ? `<p class="mt-1 text-xs text-slate-400">${esc(p.why)}</p>` : ''}
+      ${p.city && p.city !== 'not_in_qloo' ? `<p class="mt-1 text-[11px]">${cityLine(p.city)}</p>` : ''}</li>`).join('');
   const kRows = s.kindred.map((k) => `<li class="rounded-lg border border-fuchsia-400/20 bg-fuchsia-500/[.04] p-3">
       <div class="flex flex-wrap items-center gap-2"><span class="font-medium">${esc(k.partner)}</span><span class="text-[11px] uppercase tracking-wide text-slate-500">${esc(LABEL[k.domain] || k.domain)}</span>
       <span class="ml-auto">${typeof k.affinity === 'number' ? `<span class="pill bg-fuchsia-500/15 text-fuchsia-200">Qloo affinity ${pct(k.affinity)}</span>` : '<span class="pill bg-white/5 text-slate-400">Not verified in Qloo</span>'}</span></div>
-      <p class="mt-1 text-xs ${k.also_llm ? 'text-slate-500' : 'text-emerald-300/90'}">${k.also_llm ? 'Also named by the LLM alone' : 'Non-obvious: the LLM alone did not name it'}</p></li>`).join('');
-  const unsupported = s.llm_not_returned + s.llm_not_found;
+      <p class="mt-1 text-xs ${k.also_llm ? 'text-slate-500' : 'text-emerald-300/90'}">${k.also_llm ? 'Also named by the LLM alone' : 'Non-obvious: the LLM alone did not name it'}</p>
+      ${k.city ? `<p class="mt-1 text-[11px]">${cityLine(k.city)}</p>` : ''}</li>`).join('');
   el.classList.remove('hidden');
   el.innerHTML = `<div class="flex flex-wrap items-baseline gap-2"><h2 class="font-semibold">With Qloo vs LLM only</h2>
-      <span class="text-xs text-slate-500">same model · same brand, market and goal · both scored by the same Qloo query</span></div>
-    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <div class="stat"><div class="stat-k">Average Qloo affinity of the picks</div>
-        <div class="mt-1 text-2xl font-bold">${s.kindred_avg !== null ? pct(s.kindred_avg) : 'n/a'} <span class="text-sm font-normal text-slate-400">Kindred</span></div>
-        <div class="text-sm text-slate-400">vs ${s.llm_avg !== null ? pct(s.llm_avg) : 'n/a'} LLM only <span class="text-slate-500">(${s.llm_scored} of ${s.llm_only.length} scored)</span></div></div>
-      <div class="stat"><div class="stat-k">Kindred picks the LLM alone missed</div>
-        <div class="mt-1 text-2xl font-bold">${s.non_obvious} <span class="text-sm font-normal text-slate-400">of ${s.kindred.length}</span></div>
-        <div class="text-sm text-slate-400">found through Qloo affinities</div></div>
-      <div class="stat"><div class="stat-k">LLM-only picks Qloo could not support</div>
-        <div class="mt-1 text-2xl font-bold">${unsupported} <span class="text-sm font-normal text-slate-400">of ${s.llm_only.length}</span></div>
-        <div class="text-sm text-slate-400">no affinity for this audience in ${esc(market)}, or not found in Qloo</div></div>
-    </div>
+      <span class="text-xs text-slate-500">same model · same brand, market and goal · both checked by Qloo</span></div>
+    <p id="cmpfinding" class="mt-3 text-lg font-semibold leading-snug">${esc(T.finding)}</p>
+    ${T.city ? `<div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div class="stat"><div class="stat-k">Kindred picks in Qloo's ${esc(cityMarket)} data</div><div class="mt-1 text-xl font-bold">${esc(T.city.kindred)}</div></div>
+      <div class="stat"><div class="stat-k">LLM-only picks in Qloo's ${esc(cityMarket)} data</div><div class="mt-1 text-xl font-bold">${esc(T.city.llm)}</div>${T.city.llm_note ? `<div class="text-sm text-slate-400">${esc(T.city.llm_note)}</div>` : ''}</div>
+      <p class="self-center text-xs text-slate-400">${esc(T.cityNote)}</p>
+    </div>` : ''}
     <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
       <div class="rounded-xl border border-dashed border-white/15 p-4">
         <div class="text-xs uppercase tracking-wide text-slate-400">LLM only · no Qloo data</div>
@@ -412,7 +415,12 @@ function renderCompare() {
         ${areas.length ? `<p class="mt-3 text-xs text-slate-400"><b class="text-slate-300">Where:</b> ${esc(areas.join(', '))} <span class="text-slate-500">(Qloo heatmap hotspots)</span></p>` : ''}
       </div>
     </div>
-    <p class="mt-3 text-xs text-slate-500">Affinity is how strongly the audience of ${esc(state.input.brand)} over-indexes on an entity compared with the average Qloo audience: an aggregate signal, not a statement about any person, and not a forecast of campaign results. "No affinity returned" means Qloo gave no score for that entity with this audience and market.</p>`;
+    <div class="mt-4 rounded-xl border border-white/10 p-3 text-sm text-slate-400">
+      <div class="stat-k">Audience affinity, for reference</div>
+      <p class="mt-1">Average Qloo affinity of the picks: <b class="text-slate-200">${s.kindred_avg !== null ? pct(s.kindred_avg) : 'n/a'}</b> Kindred vs <b class="text-slate-200">${s.llm_avg !== null ? pct(s.llm_avg) : 'n/a'}</b> LLM only <span class="text-slate-500">(${s.llm_scored} of ${s.llm_only.length} scored)</span>. Kindred picks the LLM alone missed: <b class="text-slate-200">${s.non_obvious} of ${s.kindred.length}</b>.</p>
+      <p class="mt-1 text-xs text-slate-500">Kindred chose its partners from this same audience ranking, so this average favours it by design; the city check above does not.</p>
+    </div>
+    <p class="mt-3 text-xs text-slate-500">Affinity is how strongly the audience of ${esc(state.input.brand)} over-indexes on an entity compared with the average Qloo audience: an aggregate signal, not a statement about any person, and not a forecast of campaign results. "No affinity returned" means Qloo gave no score for that entity with this audience and market. "In Qloo's ${esc(cityMarket || 'city')} data" means Qloo returned the entity for a query whose only signal is the city.</p>`;
 }
 
 async function runCompare() {
@@ -420,7 +428,7 @@ async function runCompare() {
   btn.disabled = true;
   btn.textContent = 'Asking the model without Qloo…';
   try {
-    const res = await fetch('/api/agent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'compare', ...state.input, brand_ids: brandIdsOf(state.log) }) });
+    const res = await fetch('/api/agent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'compare', ...state.input, brand_ids: brandIdsOf(state.log), kindred: kindredPicksOf(state.brief) }) });
     const text = await res.text();
     let j = {};
     try { j = JSON.parse(text); } catch { j = { error: text }; }

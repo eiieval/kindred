@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { brotliDecompressSync } from 'node:zlib';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { matchName, sameName, verifyBrief, compareSummary, compactEvents, brandIdsOf, competitorCheck, splitCompetitors, screenBrief } from '../public/js/core.js';
+import { matchName, sameName, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, compactEvents, brandIdsOf, competitorCheck, splitCompetitors, screenBrief } from '../public/js/core.js';
 import { profileOf } from '../lib/qloo.js';
 import { parsePicks, toDomain } from '../lib/baseline.js';
 import { encodeShare, decodeShare, sanitizeEvents } from '../public/js/share.js';
@@ -54,6 +54,28 @@ const s = compareSummary(v, { llm_only: [
 expect('overlap and non-obvious picks', s.overlap === 1 && s.non_obvious === 2);
 expect('averages only use scored picks', Math.abs(s.llm_avg - 0.887) < 1e-9 && Math.abs(s.kindred_avg - 0.9665) < 1e-9 && s.llm_scored === 2);
 expect('unsupported picks are counted by reason', s.llm_not_returned === 1 && s.llm_not_found === 1);
+
+// 3a. Panel text: the plain finding first, then the city check (city signal only, so not circular).
+expect('kindredPicksOf sends only Qloo-verified partners as { id, domain }', JSON.stringify(kindredPicksOf(v)) === '[{"id":"B1","domain":"brand"},{"id":"A1","domain":"artist"}]' && kindredPicksOf(null).length === 0);
+const llm4 = s.llm_only.map(({ city, ...p }) => p);
+const sc = compareSummary(v, { llm_only: llm4, city: { market: 'Barcelona', present: { A1: 0.41, B1: 0.38 }, absent: ['C1', 'Z1'], unchecked: [] } });
+expect('city counts: present, checked, not in Qloo, per column', JSON.stringify(sc.city) === '{"market":"Barcelona","llm_present":1,"llm_checked":4,"llm_not_in_qloo":1,"kindred_present":2,"kindred_checked":2}'
+  && sc.llm_unsupported === 2 && sc.kindred[2].city === 'unchecked' && sc.llm_only[3].city === 'not_in_qloo');
+const tc = compareText(sc, 'Barcelona', 'Patagonia');
+expect('finding reads plainly: "2 of 4 picks from the model alone have no Qloo support"', tc.finding === '2 of 4 picks from the model alone have no Qloo support for this audience in Barcelona.');
+expect('city check: both columns, not-in-Qloo noted, one sentence on why it is not circular', tc.city.kindred === '2 of 2' && tc.city.llm === '1 of 4' && tc.city.llm_note === '1 not in Qloo at all'
+  && /only the city \(Barcelona\), never Patagonia's audience/.test(tc.cityNote) && /not circular/.test(tc.cityNote) && tc.cityNote.split('. ').length === 1);
+const t0 = compareText(s, 'Paris', 'Veja');
+expect('older runs without city data: finding only, no city block', s.city === null && t0.city === null && t0.cityNote === '' && /^2 of 4 picks/.test(t0.finding));
+const one = compareSummary(v, { llm_only: [llm4[0], llm4[2], { partner: 'Busy', domain: 'brand', qloo: { status: 'unchecked' } }] });
+expect('singular, rate-limited picks and all-supported cases', compareText(one, 'Paris').finding === '1 of 3 picks from the model alone has no Qloo support for this audience in Paris. 1 could not be checked (rate limited).'
+  && compareText(compareSummary(v, { llm_only: [llm4[0], llm4[1]] }), 'Paris').finding === 'All 2 picks from the model alone have Qloo support for this audience in Paris.'
+  && /could be checked/.test(compareText(compareSummary(v, { llm_only: [{ partner: 'Busy', qloo: { status: 'unchecked' } }] }), 'Paris').finding));
+expect('cityLabel per pick', cityLabel('present', 'Tokyo') === "In Qloo's Tokyo data" && cityLabel('absent', 'Tokyo') === "Not in Qloo's Tokyo data" && cityLabel('not_in_qloo') === '' && cityLabel(null) === '');
+const appSrc = read('public/app.js');
+expect('panel order: finding, then city check, then the affinity averages; compare request sends the kindred picks',
+  appSrc.indexOf('id="cmpfinding"') > 0 && appSrc.indexOf('id="cmpfinding"') < appSrc.indexOf('T.city.kindred') && appSrc.indexOf('T.city.kindred') < appSrc.indexOf('Audience affinity, for reference')
+  && /kindred: kindredPicksOf\(state\.brief\)/.test(appSrc));
 
 // 3b. Direct competitors, decided by Qloo's own tags (fixtures copied from real Qloo entities, trimmed).
 const T = (kind, ...names) => names.map((name) => ({ type: `urn:tag:${kind}:qloo`, name }));

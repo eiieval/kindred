@@ -213,6 +213,46 @@ export function compareSummary(brief, baseline) {
   };
 }
 
+// The brief's partners as the compare request sends them for the city check: [{ id, domain }], Qloo ids only.
+export function kindredPicksOf(brief) {
+  const seen = new Set();
+  return (brief?.partnerships || []).map((p) => ({ id: p?.evidence?.id ? String(p.evidence.id) : '', domain: String(p?.evidence?.domain || p?.domain || '') }))
+    .filter((k) => k.id && k.domain && !seen.has(k.id) && seen.add(k.id)).slice(0, 6);
+}
+
+const of = (a, b) => `${a} of ${b}`;
+
+// Plain-language lines for the comparison panel, finding first. s: compareSummary(); market: the city.
+//   finding  the model-alone picks with no Qloo support for this audience in the market;
+//   city     the non-circular check of both columns (null when the run has no city data);
+//   cityNote one sentence on why the city check is not circular.
+export function compareText(s, market, brand) {
+  const m = market || 'this market';
+  const n = s.llm_only.length;
+  const unchecked = s.llm_only.filter((p) => p.qloo.status === 'unchecked').length;
+  const u = s.llm_unsupported;
+  let finding;
+  if (!n) finding = 'The model alone returned no picks to check.';
+  else if (unchecked === n) finding = `None of the ${n} picks from the model alone could be checked in Qloo this time (rate limited).`;
+  else if (!u) finding = `${unchecked ? of(n - unchecked, n) : `All ${n}`} picks from the model alone ${n - unchecked === 1 ? 'has' : 'have'} Qloo support for this audience in ${m}.`;
+  else finding = `${of(u, n)} picks from the model alone ${u === 1 ? 'has' : 'have'} no Qloo support for this audience in ${m}.`;
+  if (n && unchecked && unchecked < n) finding += ` ${unchecked} could not be checked (rate limited).`;
+  const c = s.city;
+  const city = c ? {
+    kindred: c.kindred_checked ? of(c.kindred_present, c.kindred_checked) : 'not checked',
+    llm: c.llm_checked ? of(c.llm_present, c.llm_checked) : 'not checked',
+    llm_note: c.llm_not_in_qloo ? `${c.llm_not_in_qloo} not in Qloo at all` : '',
+  } : null;
+  const cityNote = c ? `City check: this query sends Qloo only the city (${c.market || m}), never ${brand || 'the brand'}'s audience, so it is not the ranking Kindred chose from and the check is not circular.` : '';
+  return { finding, city, cityNote };
+}
+
+// One short per-pick label for the city check ('' when there is nothing to say).
+export function cityLabel(status, market) {
+  const m = market || 'the city';
+  return { present: `In Qloo's ${m} data`, absent: `Not in Qloo's ${m} data`, unchecked: 'City not checked' }[status] || '';
+}
+
 // The audience Kindred actually queried: entity ids of its first affinity call (else the resolved brand).
 export const brandIdsOf = (events) => {
   const call = events.find((e) => e.type === 'tool_call' && e.data?.name === 'get_affinities');

@@ -39,11 +39,14 @@ expect('every Qloo result carries its redacted request', affEvents.length && aff
 expect('the Qloo key never appears in the stream', !happy.out.includes(process.env.QLOO_API_KEY) && !/x-api-key/i.test(happy.out));
 
 // 1b. "LLM only" comparison: same limits, JSON answer, every pick scored or explained.
-const cmp = await call({ headers: { 'x-forwarded-for': '4.4.4.4' }, body: { mode: 'compare', brand: 'Patagonia', market: 'Barcelona', brand_ids: ['DB4CE34E-3A63-4947-946F-9D52502C5762'] } });
+const cmp = await call({ headers: { 'x-forwarded-for': '4.4.4.4' }, body: { mode: 'compare', brand: 'Patagonia', market: 'Barcelona', brand_ids: ['DB4CE34E-3A63-4947-946F-9D52502C5762'],
+  kindred: [{ id: 'C752CB19-BA38-4911-AB63-EADACE2DEEED', domain: 'podcast' }, { id: '<script>', domain: 'brand' }, { id: 'A5269DD4-5BCE-4EC7-BD50-355B29F3079F', domain: 'nope' }] } });
 const base = cmp.status === 200 ? JSON.parse(cmp.out).baseline : null;
 const statuses = (base?.llm_only || []).map((p) => p.qloo.status);
 expect(`compare mode scores the LLM-only picks with Qloo (${statuses.join(', ')})`, statuses.length === 4 && statuses.includes('scored') && statuses.includes('not_returned'));
 expect('compare mode logs redacted Qloo requests', base?.requests?.some((r) => r.request.includes('filter.results.entities=')) && !/api[-_]?key/i.test(cmp.out));
+expect('compare mode runs the city check on both columns, dropping invalid kindred picks', base?.city?.market === 'Barcelona' && 'C752CB19-BA38-4911-AB63-EADACE2DEEED' in (base.city.present || {})
+  && !JSON.stringify(base.city).includes('script') && !JSON.stringify(base.city).includes('A5269DD4') && base.requests.some((r) => /signal\.location\.query=Barcelona/.test(r.request) && !/signal\.interests/.test(r.request)));
 expect('compare mode needs valid Qloo ids (400)', (await call({ headers: { 'x-forwarded-for': '5.5.5.5' }, body: { mode: 'compare', brand: 'X', brand_ids: ['<script>'] } })).status === 400);
 
 // 2. Request hygiene.
