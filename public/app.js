@@ -43,7 +43,7 @@ function setBusy(b) {
 }
 
 function reset(input, source = 'live') {
-  state = { input, source, aff: {}, tab: null, brief: null, baseline: null, heat: null, demo: null, meta: null, log: [] };
+  state = { input, source, aff: {}, tab: null, brief: null, baseline: null, heat: null, demo: null, meta: null, subject: null, log: [] };
   $('#out').classList.remove('hidden');
   $('#trace').innerHTML = '';
   $('#brief').classList.add('hidden');
@@ -91,7 +91,13 @@ function handle(ev) {
     const n = (data.tool_calls || []).filter((t) => t !== 'submit_brief').length;
     trace('🧠', (data.tool_calls || []).includes('submit_brief') ? 'Model writes the brief from the data' : `Model plans ${n} Qloo call${n === 1 ? '' : 's'}`, 'text-violet-300/90');
   } else if (type === 'tool_call') trace(ICON[data.name] || '•', describe(data.name, data.args));
-  else if (type === 'entities') trace('✓', data.results?.[0] ? `Matched <b>${esc(data.results[0].name)}</b>` : `No match for ${esc(data.query)}`, 'text-emerald-300/80');
+  else if (type === 'entities') {
+    // data.subject (recordings made from round 3 on): what the server chose to query. Brands read as before; an artist, team
+    // or venue is named with its Qloo type, as in "Matched Rosalía (artist)".
+    const s = data.subject;
+    if (s && !state.subject) state.subject = s;
+    trace('✓', data.results?.[0] ? `Matched <b>${esc((s || data.results[0]).name)}</b>${s && s.type !== 'brand' ? ` (${esc(s.type)})` : ''}` : `No match for ${esc(data.query)}`, 'text-emerald-300/80');
+  }
   else if (type === 'affinities') {
     state.aff[data.domain] = data.results || [];
     if (!state.tab || state.tab === data.domain) showTab(data.domain); else renderTabs();
@@ -198,7 +204,7 @@ function demoCard(d) {
     <div class="flex flex-wrap items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400 whitespace-nowrap">Audience skew</span><span class="ml-auto">${QTAG}</span></div>
     <div class="mt-3 space-y-1.5">${skewRows(d.age, AGE)}</div>
     ${d.gender ? `<div class="mt-3 space-y-1.5">${skewRows(d.gender)}</div>` : ''}
-    <p class="mt-3 text-[11px] text-slate-500">Over (+) or under (−) index of this brand's audience versus the average Qloo audience. Aggregate, not a census and not about individuals.</p></div>`;
+    <p class="mt-3 text-[11px] text-slate-500">Over (+) or under (−) index of this audience versus the average Qloo audience. Aggregate, not a census and not about individuals.</p></div>`;
 }
 
 function renderBrief(raw) {
@@ -225,7 +231,7 @@ function renderBrief(raw) {
     </div>` : '';
   $('#brief').innerHTML = `
     <div class="grid grid-cols-1 gap-x-3 md:grid-cols-[1fr_auto]">
-      <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wider text-fuchsia-300/80">Partnership brief · ${esc(state.input.brand)}${state.input.market ? ` · ${esc(state.input.market)}` : ''} ${AITAG}</div>
+      <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wider text-fuchsia-300/80">Partnership brief · ${state.subject && state.subject.type !== 'brand' ? `${esc(state.subject.name)} (${esc(state.subject.type)})` : esc(state.input.brand)}${state.input.market ? ` · ${esc(state.input.market)}` : ''} ${AITAG}</div>
       <h2 class="mt-1 text-2xl font-bold leading-snug md:col-span-2">${esc(b.headline)}</h2>
       <p class="mt-2 text-slate-300 md:col-span-2">${esc(b.audience_summary)}</p>
       <div class="mt-3 flex flex-wrap gap-2 md:col-start-2 md:row-start-1 md:mt-0">
@@ -320,8 +326,8 @@ function howSteps() {
   const out = [];
   const step = (title, body = '') => out.push(`<li class="rounded-lg border border-white/10 p-2.5"><div class="text-slate-200">${title}</div>${body}</li>`);
   for (const { type, data = {} } of state.log) {
-    if (type === 'meta') step(`<b>Inputs</b> · ${esc([data.inputs?.brand, data.inputs?.market, data.inputs?.goal, data.inputs?.age].filter(Boolean).join(' · '))}`, `<div class="mt-1 text-slate-500">Started ${esc(String(data.started_at || '').replace('T', ' ').slice(0, 16))} UTC · agent model ${esc(data.model || 'n/a')}. Sent to Qloo: brand name, city, optional age band. No personal data.</div>`);
-    else if (type === 'entities') step(`${QTAG} <b>Resolve the brand</b> → ${data.results?.length ? named(data.results) : 'no match'}`, data.request ? code(data.request) : '');
+    if (type === 'meta') step(`<b>Inputs</b> · ${esc([data.inputs?.brand, data.inputs?.market, data.inputs?.goal, data.inputs?.age].filter(Boolean).join(' · '))}`, `<div class="mt-1 text-slate-500">Started ${esc(String(data.started_at || '').replace('T', ' ').slice(0, 16))} UTC · agent model ${esc(data.model || 'n/a')}. Sent to Qloo: the subject's name (brand, artist, team, festival or venue), city, optional age band. No personal data.</div>`);
+    else if (type === 'entities') step(`${QTAG} <b>Resolve the ${data.subject && data.subject.type !== 'brand' ? 'subject' : 'brand'}</b> → ${data.results?.length ? named(data.results) : 'no match'}`, data.request ? code(data.request) : '');
     else if (type === 'model_turn') step(`${AITAG} <b>Model turn ${(data.step ?? 0) + 1}</b>${data.model ? ` · ${esc(data.model)}` : ''} → ${(data.tool_calls || []).includes('submit_brief') ? 'submits the brief' : `calls ${esc(Object.entries((data.tool_calls || []).reduce((m, t) => ({ ...m, [t]: (m[t] || 0) + 1 }), {})).map(([t, n]) => (n > 1 ? `${t} ×${n}` : t)).join(', '))}`}`);
     else if (type === 'affinities') step(`${QTAG} <b>${esc(LABEL[data.domain] || data.domain)} affinities</b>${data.location ? ` in ${esc(data.location)}` : ''} → ${data.results?.length || 0} results: ${named(data.results)}`, data.request ? code(data.request) : '');
     else if (type === 'heatmap') step(`${QTAG} <b>Heatmap</b> of ${esc(data.location)} → ${data.total_cells ?? data.cells?.length ?? 0} cells${data.total_cells > (data.cells?.length || 0) ? ` (map shows the ${data.cells.length} warmest)` : ''}${(data.top || []).some((t) => t.area) ? `; hotspots named via OpenStreetMap: ${esc([...new Set(data.top.map((t) => t.area).filter(Boolean))].join(', '))}` : ''}`, data.request ? code(data.request) : '');
@@ -356,7 +362,7 @@ function renderHow() {
       <ol class="space-y-2 text-xs text-slate-400">${howSteps()}</ol>
       <div class="space-y-4 text-xs text-slate-400">
         <div><div class="text-slate-200 font-medium">Credentials</div><p class="mt-1">Every Qloo and model call runs on the server. The Qloo key travels only in a request header from the server; it never reaches the browser, this trace, the recordings or the logs.</p></div>
-        <div><div class="text-slate-200 font-medium">Data handling</div><p class="mt-1">Kindred sends Qloo a brand name, a city and an optional age band. It collects no personal data and stores no briefs on a server; share links carry the brief inside the link itself.</p></div>
+        <div><div class="text-slate-200 font-medium">Data handling</div><p class="mt-1">Kindred sends Qloo the subject's name (a brand, artist, team, festival or venue), a city and an optional age band. It collects no personal data and stores no briefs on a server; share links carry the brief inside the link itself.</p></div>
         <div><div class="text-slate-200 font-medium">What this brief does not establish</div><ul class="mt-1 list-disc pl-4 space-y-1">
           <li>Affinities are aggregate: how much the audience of ${esc(state.input.brand)} over-indexes on an entity versus the average Qloo audience. They are not statements about any individual, not causal, and not a probability that anyone will buy or attend.</li>
           <li>Only the top results per domain were retrieved, so an entity missing here is not evidence of low affinity.</li>
@@ -389,7 +395,7 @@ function renderCompare() {
     el.classList.remove('hidden');
     el.innerHTML = `<div class="flex flex-wrap items-center gap-3"><h2 class="font-semibold">With Qloo vs LLM only</h2>
       <button id="cmpgo" class="ml-auto text-xs rounded-lg bg-white text-black px-3 py-2 font-medium disabled:opacity-60">Run the LLM-only comparison</button></div>
-      <p class="mt-2 text-sm text-slate-400">Ask the same model for partners with the same brand, market and goal but no Qloo data, then let Qloo score both answers for this audience. One extra model call and a few Qloo lookups; it counts toward the demo limit.</p>
+      <p class="mt-2 text-sm text-slate-400">Ask the same model for partners with the same subject, market and goal but no Qloo data, then let Qloo score both answers for this audience. One extra model call and a few Qloo lookups; it counts toward the demo limit.</p>
       <p id="cmperr" class="mt-2 text-sm text-amber-300/90"></p>`;
     $('#cmpgo').onclick = runCompare;
     return;
@@ -412,7 +418,7 @@ function renderCompare() {
       ${k.city ? `<p class="mt-1 text-[11px]">${cityLine(k.city)}</p>` : ''}</li>`).join('');
   el.classList.remove('hidden');
   el.innerHTML = `<div class="flex flex-wrap items-baseline gap-2"><h2 class="font-semibold">With Qloo vs LLM only</h2>
-      <span class="text-xs text-slate-500">same model · same brand, market and goal · both checked by Qloo</span></div>
+      <span class="text-xs text-slate-500">same model · same subject, market and goal · both checked by Qloo</span></div>
     <p id="cmpfinding" class="mt-3 text-lg font-semibold leading-snug">${esc(T.finding)}</p>
     ${T.city ? `<div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
       <div class="stat"><div class="stat-k">Kindred picks in Qloo's ${esc(cityMarket)} data</div><div class="mt-1 text-xl font-bold">${esc(T.city.kindred)}</div></div>

@@ -279,6 +279,26 @@ export function compactEvents(events, { cells = 300, perDomain = 8, images = tru
   });
 }
 
+// The subject of a brief is usually a brand, but Qloo also knows artists, teams, festivals and venues: a team or a festival
+// is a `brand` entity, an artist often comes back twice (as `person` and `artist`, same name). Picks the entity to query:
+// a brand if the results hold one, else the `artist` twin of a `person`, else the first result; null when there is none.
+// With `query` (what the visitor typed) the entities that carry that name win first, so a look-alike brand in the
+// results never outranks the artist who was asked for (a brand search for "Bad Bunny" returns "Skinny Bunny Tea").
+export function pickSubject(results = [], query = '') {
+  const all = (Array.isArray(results) ? results : []).filter((e) => e && e.name);
+  if (!all.length) return null;
+  const named = query ? all.filter((e) => matchName(query, e.name)) : [];
+  const list = named.length ? named : all;
+  const brand = list.find((e) => e.type === 'brand');
+  if (brand) return brand;
+  const first = list[0];
+  if (first.type === 'person') {
+    const twin = list.find((e) => e.type === 'artist' && normName(e.name) === normName(first.name));
+    if (twin) return twin;
+  }
+  return first;
+}
+
 const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
   const n = s.length;

@@ -46,6 +46,7 @@ export function sanitizeEvents(list) {
         .map((e) => (e.lat !== undefined && !geo(e) ? { ...e, lat: null, lng: null } : e));
       if (ev.type === 'affinities' && !DOMAIN_SET.includes(data.domain)) continue;
     }
+    if (ev.type === 'entities') data.subject = data.subject && typeof data.subject === 'object' && !Array.isArray(data.subject) ? { name: String(data.subject.name ?? '').slice(0, 80), type: String(data.subject.type ?? '').slice(0, 24) } : undefined;
     if (ev.type === 'heatmap') {
       data.cells = (Array.isArray(data.cells) ? data.cells : []).filter(geo).slice(0, 2000).map((c) => ({ lat: c.lat, lng: c.lng, affinity: num(c.affinity) }));
       data.top = (Array.isArray(data.top) ? data.top : []).filter(geo).slice(0, 10).map((c) => ({ ...c, affinity: num(c.affinity) }));

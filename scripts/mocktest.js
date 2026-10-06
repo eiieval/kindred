@@ -49,6 +49,17 @@ expect('compare mode runs the city check on both columns, dropping invalid kindr
   && !JSON.stringify(base.city).includes('script') && !JSON.stringify(base.city).includes('A5269DD4') && base.requests.some((r) => /signal\.location\.query=Barcelona/.test(r.request) && !/signal\.interests/.test(r.request)));
 expect('compare mode needs valid Qloo ids (400)', (await call({ headers: { 'x-forwarded-for': '5.5.5.5' }, body: { mode: 'compare', brand: 'X', brand_ids: ['<script>'] } })).status === 400);
 
+// 1d. Any audience: an artist is resolved without the brand look-alike a brand search returns, and the sponsors goal is accepted.
+const ent0 = events.find((e) => e.type === 'entities')?.data;
+expect('a brand run reports its subject (brand) and keeps it first', ent0?.subject?.name === 'Patagonia' && ent0.subject.type === 'brand' && ent0.results[0].name === 'Patagonia');
+const art = await call({ headers: { 'x-forwarded-for': '8.8.8.8' }, body: { brand: 'Mock Artist', market: 'Miami', goal: 'Sponsors for an artist, team or event' } });
+const artEvents = art.out.split('\n\n').filter(Boolean).map((b) => JSON.parse(b.replace(/^data: /, '')));
+const artEnt = artEvents.find((e) => e.type === 'entities')?.data;
+expect('an artist: the brand search finds only a look-alike, so the person/artist twin is the subject and goes first',
+  artEnt?.subject?.type === 'artist' && artEnt.results[0].id === 'mock-artist' && artEnt.results.map((r) => r.type).join() === 'artist,person' && !artEnt.results.some((r) => /Tea$/.test(r.name)));
+expect('the sponsors goal is accepted and the artist run completes with a verified brief', artEvents.find((e) => e.type === 'meta')?.data.inputs.goal === 'Sponsors for an artist, team or event'
+  && artEvents.some((e) => e.type === 'brief') && artEvents.some((e) => e.type === 'done') && !artEvents.some((e) => e.type === 'error'));
+
 // 2. Request hygiene.
 expect('GET is rejected (405)', (await call({ method: 'GET' })).status === 405);
 expect('cross-origin POST is rejected (403)', (await call({ headers: { origin: 'https://evil.example' }, body: { brand: 'X' } })).status === 403);
