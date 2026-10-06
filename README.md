@@ -12,25 +12,50 @@ Live demo: https://kindred-taste.vercel.app (no login). Built for the Qloo Agent
 
 Partnerships, sponsorships and pop-ups are usually picked by gut feeling, by whoever is famous, or by slow survey panels. Ask a general-purpose LLM and you get plausible names it has seen often, with no evidence that this brand's audience actually cares about them. Kindred answers three questions with aggregate taste data instead: who this audience over-indexes on, how strongly, and where in the city it concentrates. It takes about a minute.
 
+## Who uses it: a worked case
+
+**Persona.** Marta is the partnerships manager for an outdoor apparel brand's southern Europe team. Each quarter she brings two or three partner ideas and one activation neighbourhood per city to a planning meeting, and she has to show why this audience would care. Today that means desk research, social listening exports and, when budget allows, a survey panel.
+
+**The decision.** Patagonia, Barcelona, goal "brand partnership or co-branded collab": which partners go on the shortlist, which do not, and where in the city to activate. (Recorded example: `/?example=patagonia-barcelona`.)
+
+**What Kindred gives her in about a minute.**
+- Partners: GoPro (Qloo affinity 96%), Backpacker Magazine (96%) and Down to Earth with Zac Efron (95%), each tied to a Qloo entity id from that run.
+- Kept off the list, with Qloo's reason: The North Face and Arc'teryx (Qloo lists them as Patagonia competitors), Fjällräven and Icebreaker (Qloo lists Patagonia as theirs).
+- Where: l'Eixample and Gràcia (Qloo heatmap hotspots), with venues such as Yurbban Passage Hotel & Spa.
+- A check on the obvious shortcut: the same model without Qloo suggested Nomada Studio, Casa Bonay, Ricardo Cavolo and El Extraordinario. 3 of those 4 have no Qloo support for this audience in Barcelona, and in the city-only check 1 of 4 shows up in Qloo's Barcelona data against 3 of 3 of Kindred's picks.
+
+**What she decides.** GoPro and Backpacker Magazine go to the meeting as the shortlist, with the downloaded trace as evidence; l'Eixample is the pop-up area. The model-only ideas are not discarded as bad, but they are labelled as unsupported hypotheses rather than audience insight. Kindred does not decide fit, availability, price or brand safety: she still checks those.
+
+**Time, estimated.** These are our estimates for one brand and one city, not measurements with users.
+
+| Step | Manual research (estimate) | With Kindred (estimate) |
+|---|---|---|
+| Cross-domain affinities of the audience | 4-8 h of desk research and social listening (or a 2-4 week survey panel) | about 1 min, one agent run |
+| Remove direct competitors | 30-60 min | automatic, each with Qloo's reason |
+| Where in the city | 1-2 h with maps and local knowledge | included (heatmap hotspots and venues) |
+| Evidence for the deck | 1-2 h | Markdown brief and request trace, downloaded |
+| Review and judgement | included above | 30-60 min |
+| **Total** | **roughly 1-1.5 working days** | **under 1 hour** |
+
 ## With Qloo vs LLM only
 
-Every brief can be compared with what the same model says without Qloo. For the same brand, market and goal, the model answers in one call with no tools and no data. Then both answers are scored by Qloo for the same audience and market (`/v2/insights` with `filter.results.entities`), so both columns use one scale. Misses are reported as such, never imputed.
+Every brief can be compared with what the same model says without Qloo. For the same brand, market and goal, the model answers in one call with no tools and no data. Then Qloo checks both answers. Misses are reported as such, never imputed.
 
-Results from the recorded real runs (October 2026, model `gemini-flash-lite-latest`):
+**The plain finding.** Across seven recorded runs (October 2026, model `gemini-flash-lite-latest`), 21 of the model's 28 picks had no Qloo support for the brand's audience in that city: Qloo returned no affinity for them, or its search did not find them at all.
 
-| Brand · market (goal) | Kindred picks: avg Qloo affinity | LLM-only picks: avg Qloo affinity (scored) | LLM-only picks with no Qloo support | Kindred picks the LLM alone missed |
+**The city check, which is not circular.** Kindred picks partners from the audience's Qloo affinities, so scoring both columns with that same audience query favours Kindred by design. The city check avoids that: it asks Qloo whether each pick appears in its data for the city at all, sending only the city (`signal.location.query`) and never the brand's audience. All 22 of Kindred's partners appear in Qloo's data for their city; 7 of the model's 28 picks do, and 8 are not in Qloo at all.
+
+| Brand · market (goal) | LLM-only picks with no Qloo support | In Qloo's city data, city signal only: Kindred · LLM only | Kindred picks the LLM alone missed | Avg audience affinity: Kindred · LLM only (scored) |
 |---|---|---|---|---|
-| Patagonia · Barcelona (brand partnership or co-branded collab) | 95% | 85% (1 of 4) | 3 of 4 | 3 of 3 |
-| Oatly · London (pop-up activation) | 97% | 85% (1 of 4) | 3 of 4 | 4 of 4 |
-| Liquid Death · Austin (music or event sponsorship) | 94% | 86% (1 of 4) | 3 of 4 | 3 of 3 |
-| Blue Bottle Coffee · Tokyo (pop-up activation) | 96% | 88% (1 of 4) | 3 of 4 | 3 of 3 |
-| Robinhood · New York (podcast or media sponsorship) | 94% | 69% (1 of 4) | 3 of 4 | 3 of 3 |
-| Veja · Paris (creator or talent partnership) | 92% | n/a (0 of 4) | 4 of 4 | 3 of 3 |
-| Greenpeace · Mexico City (music or event sponsorship, 35 and younger) | 94% | 88% (2 of 4) | 2 of 4 | 3 of 3 |
+| Patagonia · Barcelona (brand partnership or co-branded collab) | 3 of 4 | 3 of 3 · 1 of 4 | 3 of 3 | 95% · 85% (1 of 4) |
+| Oatly · London (pop-up activation) | 3 of 4 | 4 of 4 · 1 of 4 | 4 of 4 | 97% · 85% (1 of 4) |
+| Liquid Death · Austin (music or event sponsorship) | 3 of 4 | 3 of 3 · 1 of 4 | 3 of 3 | 94% · 86% (1 of 4) |
+| Blue Bottle Coffee · Tokyo (pop-up activation) | 3 of 4 | 3 of 3 · 1 of 4 | 3 of 3 | 96% · 88% (1 of 4) |
+| Robinhood · New York (podcast or media sponsorship) | 3 of 4 | 3 of 3 · 1 of 4 | 3 of 3 | 94% · 69% (1 of 4) |
+| Veja · Paris (creator or talent partnership) | 4 of 4 | 3 of 3 · 0 of 4 | 3 of 3 | 92% · n/a (0 of 4) |
+| Greenpeace · Mexico City (music or event sponsorship, 35 and younger) | 2 of 4 | 3 of 3 · 2 of 4 | 3 of 3 | 94% · 88% (2 of 4) |
 
-Across the seven runs, all 22 of Kindred's partners matched Qloo results (average affinity 95%) and none of them was named by the model alone. Of the model's 28 picks, 21 had no Qloo affinity for that audience and city or were not found by Qloo search; the 7 that Qloo could score averaged 84%. Five runs were re-recorded on 6 October 2026 with the competitor filter; none of the seven briefs contains a direct competitor.
-
-Reading the table: Kindred's partners come from the audience's top Qloo affinities, so they score higher by construction; the point is that a model on its own does not know those affinities. Its picks are often local, plausible and unsupported: Qloo returns no affinity for them with this audience in that city, or its search does not find them. Kindred's picks are also ones the model alone did not name. The comparison runs live too (button under any live brief), within the same rate limits.
+None of Kindred's 22 partners was named by the model alone. The affinity averages (last column) are kept for reference only, for the reason above: Kindred's partners come from the top of that same ranking. What the table shows is that a model on its own does not know these affinities: its picks are often local and plausible but unsupported. Five runs were re-recorded on 6 October 2026 with the competitor filter, and the city check was added to all seven the same day from their stored picks; none of the seven briefs contains a direct competitor. The comparison runs live too (button under any live brief), within the same rate limits.
 
 ## How it works
 
@@ -54,7 +79,7 @@ Why these Qloo calls fit the problem:
 - **Places** (`filter.type=urn:entity:place`, `filter.location.query`) give concrete venues in the market city.
 - **Heatmap** (`filter.type=urn:heatmap`) shows where in the city the audience concentrates; hotspots get neighbourhood names from OpenStreetMap.
 - **Demographics** (`filter.type=urn:demographics`) gives the audience's age and gender skew.
-- **Candidate scoring** (`filter.results.entities`) asks Qloo for the affinity of specific entities, which is how the LLM-only picks are measured on the same scale.
+- **Candidate scoring** (`filter.results.entities`) asks Qloo for the affinity of specific entities, which is how the LLM-only picks are measured on the same scale. With only `signal.location.query` as the signal, the same filter becomes the city check of both columns.
 - **Brand tags** (`competitor_brand`, `similar_brand`, `industry`, `product_category` on brand entities; `category` on places) decide what a direct competitor is. Affinity is not complementarity: co-affinity is strongest inside a category, so for Patagonia in Barcelona the top brands were The North Face (98%), Arc'teryx (96%) and Fjällräven (96%), all rivals. A candidate is skipped when Qloo lists it as the brand's competitor or the brand as its competitor; when both share a Qloo industry and product category (Illy for Blue Bottle Coffee: Food & Beverage, Coffee); when Qloo tags it as a similar brand and the products overlap (Voodoo Ranger for Liquid Death: Hard Tea and Iced Tea); or, for a place, when its category is the brand's own business (a coffee shop for a café chain). Complementary brands stay: Oatly keeps Moving Mountains (plant-based meat), Patagonia keeps GoPro.
 
 The agent decides which domains fit the goal and fires the calls in parallel; a throttle keeps at most 3 Qloo requests in flight and retries 429s with bounded backoff. The brief can only be submitted after real affinity data has been gathered.
@@ -91,6 +116,10 @@ Patagonia, Barcelona, "Brand partnership or co-branded collab", recorded run of 
    GET /v2/insights?filter.type=urn:entity:brand&...&signal.location.query=Barcelona&filter.results.entities=AF49B6D7-... -> Nomada Studio 0.853
    GET /v2/insights?filter.type=urn:entity:artist&...&filter.results.entities=EB54CADB-... -> no affinity returned for Barcelona
    Casa Bonay and El Extraordinario: not found in Qloo.
+7. City check of both columns (only the city as signal, no brand audience):
+   GET /v2/insights?filter.type=urn:entity:brand&filter.results.entities=AF49B6D7-...,3381E64E-...,7A016C85-...&signal.location.query=Barcelona -> 3 of 3 present
+   GET /v2/insights?filter.type=urn:entity:artist&filter.results.entities=EB54CADB-...&signal.location.query=Barcelona -> 0 of 1 present
+   Kindred 3 of 3 in Qloo's Barcelona data; LLM only 1 of 4 (Casa Bonay and El Extraordinario are not in Qloo).
 ```
 
 ## Demo resilience
