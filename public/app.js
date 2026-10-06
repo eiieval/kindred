@@ -492,6 +492,8 @@ async function openShared(token) {
   const f = $('#f');
   f.brand.value = input.brand;
   f.market.value = input.market;
+  if ([...f.goal.options].some((o) => o.value === input.goal)) f.goal.value = input.goal;
+  f.age.value = [...f.age.options].some((o) => o.value === input.age) ? input.age : '';
   if (!events || !events.some((e) => e.type === 'brief')) {
     handle({ type: 'error', data: { message: 'This share link is incomplete or damaged.', code: 'unavailable' } });
     return;
