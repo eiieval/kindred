@@ -48,5 +48,5 @@ details[open] > summary::before { transform: rotate(90deg); }
 .tour-skip { background: none; color: #cbd5e1; border: 1px solid rgba(255,255,255,.2); }
 .tour-hl { outline: 2px solid rgba(232,121,249,.75); outline-offset: 4px; scroll-margin-top: 1rem; }
 body.touring { padding-bottom: 11rem; }
-.hero-line { margin-top: 1.25rem; max-width: 42rem; font-size: 1.05rem; line-height: 1.45; color: #e2e8f0; font-weight: 500; }
+.hero-line { margin-top: 1.25rem; max-width: 52rem; font-size: 1.05rem; line-height: 1.45; color: #e2e8f0; font-weight: 500; }
 .hero-stat { margin-top: .5rem; max-width: 42rem; font-size: .8rem; color: #5eead4; }

@@ -36,10 +36,8 @@
       Find who your audience <span class="bg-gradient-to-r from-fuchsia-400 to-amber-300 bg-clip-text text-transparent">already loves</span>,
       <br class="hidden md:block"> and where to meet them.
     </h1>
-    <p class="hero-line">Agents, but with taste: partnership briefs grounded in Qloo affinities, checked against the same model without Qloo.</p>
+    <p class="hero-line">Agents, but with taste. Partnership and sponsorship briefs for brands, artists, teams and events, grounded in Qloo affinities and checked against the same model without Qloo.</p>
     <p class="hero-stat">In 7 recorded runs, 21 of 28 picks from the model alone had no Qloo support for the audience.</p>
-    <p class="mt-4 text-slate-400 max-w-2xl">Kindred is an AI agent that reads cross-domain taste data from Qloo to scout partnerships across music, podcasts, TV, film, brands and places, then maps where to activate. No personal data, just culture.</p>
-    <p class="mt-2 text-sm text-slate-500 max-w-2xl">For partnership managers: an evidence-backed shortlist in about a minute, where desk research takes a day or more (our estimate).</p>
   </header>
 
   <main class="max-w-6xl mx-auto px-4 pb-16">
@@ -70,9 +68,6 @@
         <ol id="trace" class="mt-3 space-y-2 text-sm max-h-44 overflow-y-auto pr-1 lg:max-h-none lg:overflow-visible"></ol>
       </aside>
       <div class="space-y-6 min-w-0">
-        <div id="brief" class="glass rounded-2xl p-5 hidden"></div>
-        <div id="compare" class="glass rounded-2xl p-5 hidden"></div>
-        <div id="how" class="glass rounded-2xl p-5 hidden"></div>
         <div class="glass rounded-2xl p-5">
           <div class="flex flex-wrap items-center gap-3">
             <h2 class="font-semibold">Taste graph</h2>
@@ -81,11 +76,14 @@
           </div>
           <div id="grid" class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3"></div>
         </div>
+        <div id="brief" class="glass rounded-2xl p-5 hidden"></div>
         <div class="glass rounded-2xl p-5">
           <div class="flex items-center gap-2"><h2 class="font-semibold">Where to activate</h2><span class="prov prov-q" title="Returned by the Qloo API in this run">Qloo data</span></div>
           <div id="map" class="mt-4 h-80 md:h-96 rounded-xl overflow-hidden"></div>
           <p id="mapnote" class="mt-2 text-xs text-slate-500"></p>
         </div>
+        <div id="compare" class="glass rounded-2xl p-5 hidden"></div>
+        <div id="how" class="glass rounded-2xl p-5 hidden"></div>
       </div>
     </section>
   </main>

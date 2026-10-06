@@ -199,7 +199,14 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
   const steps = tourSteps({ brand: 'Patagonia', market: 'Barcelona' });
   expect('tour has 3 steps with the brand and the city, each pointing at an existing id', steps.length === 3 && /Patagonia/.test(steps[0].title) && /Barcelona/.test(steps[2].title) && steps.every((x) => html.includes(`id="${x.selector.slice(1)}"`)));
   expect('tour steps survive missing input and long names', tourSteps({}).length === 3 && tourSteps({ brand: 'x'.repeat(500) })[0].title.length < 200);
+  const at = (s) => html.indexOf(s);
+  const pos = steps.map((x) => at(`id="${x.selector.slice(1)}"`));
+  expect('right column follows the data and the tour: taste graph, brief, map, comparison, trace', pos[0] > 0 && pos[0] < pos[1] && pos[1] < pos[2] && at('id="map"') < at('id="compare"') && at('id="compare"') < at('id="how"'));
+  const header = html.match(/<header[\s\S]*<\/header>/)[0];
+  expect('cover is the headline, one pitch line and the metric: the two long paragraphs are gone', /class="hero-line">Agents, but with taste\. Partnership and sponsorship briefs for brands, artists, teams and events, grounded in Qloo affinities and checked against the same model without Qloo\.<\/p>/.test(header)
+    && /class="hero-stat"/.test(header) && (header.match(/<p /g) || []).length === 2 && !/No personal data, just culture|For partnership managers/.test(html));
   expect('cover has the one-line pitch, the recorded-runs metric and the tour caption region', /Agents, but with taste/.test(html) && /21 of 28 picks/.test(html) && /id="tour"/.test(html) && /21 of the model's 28/.test(read('README.md')));
+  expect('?example=x&tour=1 plays the requested example once: the tour reuses its replay', /maybeTour\(asked, asked \? openExample\(asked\) : null\)/.test(appSrc) && /if \(opened\) await opened;/.test(appSrc));
   expect('tour is local only: no network calls in tour.js, storage failures are caught', !/fetch\(/.test(read('public/js/tour.js')) && /catch/.test(read('public/js/tour.js')));
   expect('tour caption is fixed at the bottom with a CSP-safe stylesheet (no inline script)', /\.tour \{ position: fixed/.test(read('styles/input.css')) && !/<script(?![^>]*src=)/.test(html));
   expect('mobile: the caption fits a 320 px viewport (left/right margins, max-width)', /\.tour \{[^}]*left: \.75rem; right: \.75rem;[^}]*max-width: 34rem/.test(read('styles/input.css')));

@@ -547,9 +547,8 @@ fetch('examples/index.json').then((r) => r.json()).then((list) => {
   EXAMPLES = Array.isArray(list) ? list : [];
   $('#examples').innerHTML = `<span class="text-slate-500 mr-1">Recorded real runs:</span>${exampleButtons()}`;
   document.querySelectorAll('[data-exlist]').forEach((el) => { el.innerHTML = exampleButtons(); });
-  const ex = EXAMPLES.find((e) => e.slug === params.get('example'));
-  if (ex) openExample(ex);
-  maybeTour();
+  const asked = EXAMPLES.find((e) => e.slug === params.get('example'));
+  maybeTour(asked, asked ? openExample(asked) : null);
 }).catch(() => {});
 
 async function openShared(token) {
@@ -581,13 +580,15 @@ else if (params.get('brand')) {
 
 // Cover: a first visit with no link parameters replays the Patagonia run (static JSON only, no API calls) and walks
 // through it in three captions. ?tour=1 forces it again; localStorage keeps it from repeating.
-async function maybeTour() {
+// asked / opened: the example the link names and its replay in progress, so ?example=x&tour=1 plays it once, not twice.
+async function maybeTour(asked, opened) {
   const forced = params.get('tour') === '1';
   const plain = !params.get('brand') && !params.get('example') && !location.hash.startsWith('#b=');
   if (!(forced || (plain && !tourSeen()))) return;
-  const ex = EXAMPLES.find((e) => e.slug === 'patagonia-barcelona') || EXAMPLES[0];
+  const ex = asked || EXAMPLES.find((e) => e.slug === 'patagonia-barcelona') || EXAMPLES[0];
   if (!ex) return;
-  if (!state || forced) await openExample(ex);
+  if (opened) await opened;
+  else if (!state || forced) await openExample(ex);
   startTour(tourSteps(ex), {
     onEnd: () => {
       const f = $('#f');
