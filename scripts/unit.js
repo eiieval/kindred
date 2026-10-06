@@ -205,5 +205,20 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
   expect('mobile: the caption fits a 320 px viewport (left/right margins, max-width)', /\.tour \{[^}]*left: \.75rem; right: \.75rem;[^}]*max-width: 34rem/.test(read('styles/input.css')));
 }
 
+// 12. Favicon, link-preview card and touch icon (the page used to give a 404 for /favicon.ico and no card on shares).
+{
+  const html = read('public/index.html');
+  const png = (p) => { const b = readFileSync(new URL(p, root)); return { ok: b.toString('latin1', 1, 4) === 'PNG', w: b.readUInt32BE(16), h: b.readUInt32BE(20), kb: b.length / 1024 }; };
+  const og = png('public/og.png');
+  const icon = png('public/icon-180.png');
+  expect('page links an SVG favicon and an apple-touch-icon', /<link rel="icon" href="\/favicon\.svg" type="image\/svg\+xml">/.test(html) && /<link rel="apple-touch-icon" href="\/icon-180\.png">/.test(html));
+  expect('Open Graph and Twitter tags point at an absolute /og.png, large-image card', /property="og:image" content="https:\/\/[^"/]+\/og\.png"/.test(html) && /name="twitter:image" content="https:\/\/[^"/]+\/og\.png"/.test(html)
+    && /name="twitter:card" content="summary_large_image"/.test(html) && /property="og:type" content="website"/.test(html) && /property="og:image:width" content="1200"/.test(html) && /property="og:image:height" content="630"/.test(html)
+    && /property="og:title" content="Kindred · Partnership briefs with taste"/.test(html) && /property="og:url" content="https:\/\/kindred-taste\.vercel\.app\/"/.test(html));
+  expect('og.png is a 1200x630 PNG under 300 KB and icon-180.png is 180x180', og.ok && og.w === 1200 && og.h === 630 && og.kb < 300 && icon.ok && icon.w === 180 && icon.h === 180);
+  expect('favicon.svg is an SVG with the brand gradient', read('public/favicon.svg').trimStart().startsWith('<svg') && /#d946ef/.test(read('public/favicon.svg')) && /#fbbf24/.test(read('public/favicon.svg')));
+  expect("the strict CSP still covers the images (img-src 'self')", /img-src 'self'/.test(csp));
+}
+
 console.log(failed ? `${failed} check(s) failed` : 'all unit checks passed');
 process.exit(failed ? 1 : 0);
