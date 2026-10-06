@@ -3,11 +3,17 @@ import { verifyBrief, compareSummary, brandIdsOf } from './js/core.js';
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const pct = (a) => (typeof a === 'number' ? `${Math.round(a * 100)}%` : '');
+const pct1 = (a) => (typeof a === 'number' ? `${(a * 100).toFixed(1)}%` : '');
+const shortId = (id) => (id ? `<span title="Qloo entity id ${esc(id)}">${esc(String(id).slice(0, 8))}…</span>` : '');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const slug = (s) => String(s || 'brief').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 let EXAMPLES = []; // recorded real runs, listed in examples/index.json
 const ICON = { find_entity: '🔎', get_affinities: '✨', get_heatmap: '🗺️', get_audience_profile: '👥' };
+// Provenance labels: what Qloo returned in this run vs what the model wrote from it (SAFE_USE.md).
+const QTAG = '<span class="prov prov-q" title="Returned by the Qloo API in this run">Qloo data</span>';
+const AITAG = '<span class="prov prov-ai" title="Written by the AI model from the Qloo data. Validate before acting.">AI interpretation</span>';
+const AGE = { '24_and_younger': '24 and under', '25_to_29': '25 to 29', '30_to_34': '30 to 34', '35_to_44': '35 to 44', '45_to_54': '45 to 54', '55_and_older': '55 and over', '35_and_younger': '35 and under', '36_to_55': '36 to 55' };
 const LABEL = { artist: 'Artists', brand: 'Brands', movie: 'Films', tv_show: 'TV', podcast: 'Podcasts', book: 'Books', videogame: 'Games', place: 'Venues', destination: 'Destinations', person: 'People' };
 
 let state = null;
@@ -29,13 +35,15 @@ function setBusy(b) {
 }
 
 function reset(input, source = 'live') {
-  state = { input, source, aff: {}, tab: null, brief: null, baseline: null, heat: null, log: [] };
+  state = { input, source, aff: {}, tab: null, brief: null, baseline: null, heat: null, demo: null, meta: null, log: [] };
   $('#out').classList.remove('hidden');
   $('#trace').innerHTML = '';
   $('#brief').classList.add('hidden');
   $('#brief').innerHTML = '';
   $('#compare').classList.add('hidden');
   $('#compare').innerHTML = '';
+  $('#how').classList.add('hidden');
+  $('#how').innerHTML = '';
   $('#tabs').innerHTML = '';
   $('#grid').innerHTML = '<p class="col-span-full text-sm text-slate-500">The agent is gathering taste signals…</p>';
   $('#mapnote').textContent = '';
@@ -62,19 +70,25 @@ function describe(name, a = {}) {
 function handle(ev) {
   const { type, data } = ev;
   state.log.push(ev);
-  if (type === 'tool_call') trace(ICON[data.name] || '•', describe(data.name, data.args));
+  if (type === 'meta') {
+    state.meta = data;
+    if (state.source === 'example' && data.started_at) trace('🎞️', `Replay of a real run recorded ${esc(data.started_at.slice(0, 10))}. No API calls.`, 'text-slate-400');
+  } else if (type === 'model_turn') {
+    const n = (data.tool_calls || []).filter((t) => t !== 'submit_brief').length;
+    trace('🧠', (data.tool_calls || []).includes('submit_brief') ? 'Model writes the brief from the data' : `Model plans ${n} Qloo call${n === 1 ? '' : 's'}`, 'text-violet-300/90');
+  } else if (type === 'tool_call') trace(ICON[data.name] || '•', describe(data.name, data.args));
   else if (type === 'entities') trace('✓', data.results?.[0] ? `Matched <b>${esc(data.results[0].name)}</b>` : `No match for ${esc(data.query)}`, 'text-emerald-300/80');
   else if (type === 'affinities') {
     state.aff[data.domain] = data.results || [];
     if (!state.tab || state.tab === data.domain) showTab(data.domain); else renderTabs();
     if (data.domain === 'place') plotVenues(data.results || []);
   } else if (type === 'heatmap') { state.heat = data; plotHeatmap(data); }
-  else if (type === 'demographics') trace('✓', 'Audience profile ready', 'text-emerald-300/80');
+  else if (type === 'demographics') { state.demo = data; trace('✓', 'Audience profile ready', 'text-emerald-300/80'); }
   else if (type === 'tool_error') trace('⚠️', `${esc(data.name)}: ${esc(data.error)}`, 'text-amber-300/90');
   else if (type === 'brief') renderBrief(data);
-  else if (type === 'baseline') { state.baseline = data; renderCompare(); }
+  else if (type === 'baseline') { state.baseline = data; renderCompare(); renderHow(); }
   else if (type === 'error') { trace('⛔', esc(data.message), 'text-rose-300'); setBusy(false); }
-  else if (type === 'done') { trace('🏁', 'Brief ready', 'text-emerald-300'); setBusy(false); }
+  else if (type === 'done') { trace('🏁', 'Brief ready', 'text-emerald-300'); setBusy(false); renderHow(); }
 }
 
 function renderTabs() {
@@ -110,7 +124,7 @@ function plotHeatmap({ location, cells = [], top = [] }) {
   top.forEach((c, i) => L.marker([c.lat, c.lng], { title: c.area || `Hotspot ${i + 1}` }).bindPopup(`<b>${esc(c.area || `Hotspot ${i + 1}`)}</b><br>Affinity ${pct(c.affinity)}`).addTo(layer));
   map.fitBounds(L.latLngBounds(cells.map((c) => [c.lat, c.lng])).pad(0.1));
   const names = [...new Set(top.map((c) => c.area).filter(Boolean))];
-  $('#mapnote').textContent = `Warmer = the audience over-indexes there (Qloo heatmap, ${location}).${names.length ? ` Top areas: ${names.join(', ')}.` : ''}`;
+  $('#mapnote').textContent = `Warmer = the audience over-indexes there (Qloo heatmap, ${location}). Pink dots: venues from Qloo.${names.length ? ` Top areas: ${names.join(', ')} (names from OpenStreetMap).` : ''}`;
 }
 
 function plotVenues(list) {
@@ -124,14 +138,39 @@ function plotVenues(list) {
 function toMarkdown(b) {
   const i = state.input;
   const A = b.activation || {};
+  const P = b.provenance || {};
   return [
     `# Kindred partnership brief: ${i.brand}${i.market ? ` in ${i.market}` : ''}`, '', `**${b.headline || ''}**`, '', b.audience_summary || '', '', '## Partnerships',
-    ...(b.partnerships || []).map((p) => `- **${p.partner}** (${p.domain}${typeof p.affinity === 'number' ? `, ${pct(p.affinity)} affinity` : ''}): ${p.concept}\n  - Why: ${p.why}`),
-    '', `## Activation${A.city ? ` in ${A.city}` : ''}`, A.plan || '', ...(A.venues || []).map((v) => `- ${v}`),
+    ...(b.partnerships || []).map((p) => `- **${p.partner}** (${p.domain}${p.evidence ? `, Qloo affinity ${pct(p.affinity)}, entity ${p.evidence.id}` : ', not verified in Qloo results'}): ${p.concept}\n  - Why (AI interpretation): ${p.why}`),
+    '', `## Activation${A.city ? ` in ${A.city}` : ''}`, A.plan || '', ...(A.venue_evidence || (A.venues || []).map((v) => ({ name: v }))).map((v) => `- ${v.name}${v.evidence ? ` (Qloo venue, affinity ${pct(v.evidence.affinity)})` : ''}`),
     '', '## Messaging themes', ...(b.messaging_themes || []).map((t) => `- ${t}`),
     ...((b.watch_outs || []).length ? ['', '## Watch-outs', ...b.watch_outs.map((w) => `- ${w}`)] : []),
+    '', '## Sources and limits',
+    `- Qloo data: partner and venue affinities, heatmap and audience skew returned by the Qloo API${state.meta?.started_at ? ` on ${state.meta.started_at.slice(0, 10)}` : ''}. ${P.partners_verified ?? '?'}/${P.partners_total ?? '?'} partners and ${P.venues_verified ?? '?'}/${P.venues_total ?? '?'} venues matched to Qloo results.`,
+    '- AI interpretation: headline, summary, concepts, plan, themes and watch-outs were written by the model from that data. Validate before acting.',
+    '- Affinities are aggregate audience signals, not statements about any individual, not causal, and not a forecast of results.',
     '', '_Generated by Kindred with Qloo Taste AI._',
   ].join('\n');
+}
+
+function skewRows(obj = {}, labels = {}) {
+  return Object.entries(obj).filter(([, v]) => typeof v === 'number').map(([k, v]) => {
+    const w = Math.min(50, Math.abs(v) * 50);
+    const bar = v >= 0 ? `left:50%;width:${w}%` : `right:50%;width:${w}%`;
+    return `<div class="grid grid-cols-[5.5rem_1fr_2.6rem] items-center gap-2 text-xs">
+      <span class="text-slate-400">${esc(labels[k] || k.replace(/_/g, ' '))}</span>
+      <div class="relative h-2 rounded bg-white/5"><div class="absolute inset-y-0 left-1/2 w-px bg-white/25"></div><div class="absolute inset-y-0 rounded ${v >= 0 ? 'bg-emerald-400/70' : 'bg-rose-400/60'}" style="${bar}"></div></div>
+      <span class="text-right tabular-nums text-slate-300">${v > 0 ? '+' : ''}${v.toFixed(2)}</span></div>`;
+  }).join('');
+}
+
+function demoCard(d) {
+  if (!d || d.unavailable || (!d.age && !d.gender)) return '';
+  return `<div class="rounded-xl border border-white/10 p-4">
+    <div class="flex items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400">Audience skew</span><span class="ml-auto">${QTAG}</span></div>
+    <div class="mt-3 space-y-1.5">${skewRows(d.age, AGE)}</div>
+    ${d.gender ? `<div class="mt-3 space-y-1.5">${skewRows(d.gender)}</div>` : ''}
+    <p class="mt-3 text-[11px] text-slate-500">Over (+) or under (−) index of this brand's audience versus the average Qloo audience. Aggregate, not a census and not about individuals.</p></div>`;
 }
 
 function renderBrief(raw) {
@@ -139,33 +178,48 @@ function renderBrief(raw) {
   const b = raw?.provenance ? raw : verifyBrief(raw, state.aff);
   state.brief = b;
   const A = b.activation || {};
-  const partners = (b.partnerships || []).map((p) => `<div class="rounded-xl border border-white/10 bg-white/[.03] p-4">
+  const P = b.provenance || {};
+  const partners = (b.partnerships || []).map((p) => `<div class="rounded-xl border ${p.evidence ? 'border-white/10' : 'border-amber-400/40'} bg-white/[.03] p-4">
       <div class="flex items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400">${esc(LABEL[p.domain] || p.domain)}</span>
-      ${typeof p.affinity === 'number' ? `<span class="ml-auto text-xs rounded-full bg-fuchsia-500/15 text-fuchsia-200 px-2 py-0.5">${pct(p.affinity)} affinity</span>` : ''}</div>
+      ${p.evidence ? `<span class="ml-auto text-xs rounded-full bg-fuchsia-500/15 text-fuchsia-200 px-2 py-0.5">${pct(p.affinity)} affinity</span>` : '<span class="ml-auto text-xs rounded-full bg-amber-400/10 text-amber-200 px-2 py-0.5">unverified</span>'}</div>
       <div class="mt-1 text-lg font-semibold">${esc(p.partner)}</div>
-      <p class="mt-2 text-sm text-slate-200">${esc(p.concept)}</p>
+      <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">${p.evidence ? `${QTAG}<span>matched Qloo entity ${shortId(p.evidence.id)}</span>` : '<span class="text-amber-200/90">Not found in this run\'s Qloo results: treat as an unverified suggestion.</span>'}</div>
+      ${p.evidence && typeof p.model_affinity === 'number' ? `<p class="mt-1 text-[11px] text-amber-200/80">The model wrote ${pct1(p.model_affinity)}; the value shown is Qloo's ${pct1(p.affinity)}.</p>` : ''}
+      <div class="mt-3">${AITAG}</div>
+      <p class="mt-1.5 text-sm text-slate-200">${esc(p.concept)}</p>
       <p class="mt-2 text-xs text-slate-400">${esc(p.why)}</p></div>`).join('');
+  const venues = A.venue_evidence || (A.venues || []).map((v) => ({ name: v, evidence: null }));
   $('#brief').innerHTML = `
     <div class="flex flex-wrap items-start gap-3">
       <div class="flex-1 min-w-[240px]">
-        <div class="text-xs uppercase tracking-wider text-fuchsia-300/80">Partnership brief · ${esc(state.input.brand)}${state.input.market ? ` · ${esc(state.input.market)}` : ''}</div>
+        <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wider text-fuchsia-300/80">Partnership brief · ${esc(state.input.brand)}${state.input.market ? ` · ${esc(state.input.market)}` : ''} ${AITAG}</div>
         <h2 class="mt-1 text-2xl font-bold leading-snug">${esc(b.headline)}</h2>
         <p class="mt-2 text-slate-300">${esc(b.audience_summary)}</p>
       </div>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
+        <button id="share" class="text-xs rounded-lg border border-fuchsia-400/40 px-3 py-2 hover:border-fuchsia-300 hidden">Copy share link</button>
         <button id="copy" class="text-xs rounded-lg border border-white/15 px-3 py-2 hover:border-white/40">Copy as Markdown</button>
         <button id="dl" class="text-xs rounded-lg bg-white text-black px-3 py-2 font-medium">Download .md</button>
       </div>
     </div>
-    <div class="mt-5 grid gap-3 md:grid-cols-2">${partners}</div>
-    <div class="mt-5 grid gap-4 md:grid-cols-[1.4fr_1fr]">
+    <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg bg-white/[.03] px-3 py-2 text-[11px] text-slate-400">
+      <span>${QTAG} returned by the Qloo API in this run</span>
+      <span>${AITAG} written by the model from that data; validate before acting</span>
+      <span class="sm:ml-auto">Checked: ${P.partners_verified ?? 0}/${P.partners_total ?? 0} partners and ${P.venues_verified ?? 0}/${P.venues_total ?? 0} venues match Qloo results${P.corrected ? ` · ${P.corrected} ${P.corrected === 1 ? 'affinity' : 'affinities'} corrected to Qloo's value` : ''}</span>
+    </div>
+    <div class="mt-4 grid gap-3 md:grid-cols-2">${partners}</div>
+    <div class="mt-5 grid gap-4 ${demoCard(state.demo) ? 'lg:grid-cols-[1.3fr_1fr_1fr]' : 'md:grid-cols-[1.4fr_1fr]'}">
       <div class="rounded-xl border border-white/10 p-4">
-        <div class="text-xs uppercase tracking-wide text-slate-400">Activation${A.city ? ` · ${esc(A.city)}` : ''}</div>
+        <div class="flex items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400">Activation${A.city ? ` · ${esc(A.city)}` : ''}</span><span class="ml-auto">${AITAG}</span></div>
         <p class="mt-2 text-sm text-slate-200">${esc(A.plan)}</p>
-        ${(A.venues || []).length ? `<div class="mt-3 flex flex-wrap gap-1.5">${A.venues.map((v) => `<span class="text-xs rounded-full bg-white/5 border border-white/10 px-2 py-0.5">${esc(v)}</span>`).join('')}</div>` : ''}
+        ${venues.length ? `<div class="mt-3 flex items-center gap-2"><span class="text-[11px] uppercase tracking-wide text-slate-500">Venues</span>${QTAG}</div>
+        <div class="mt-1.5 flex flex-wrap gap-1.5">${venues.map((v) => (v.evidence
+    ? `<span class="text-xs rounded-full bg-white/5 border border-white/10 px-2 py-0.5" title="Qloo venue ${esc(v.evidence.id || '')}, affinity ${pct(v.evidence.affinity)}">✓ ${esc(v.name)}</span>`
+    : `<span class="text-xs rounded-full border border-dashed border-amber-400/40 text-amber-100/80 px-2 py-0.5" title="Not found in this run's Qloo venue results">? ${esc(v.name)}</span>`)).join('')}</div>` : ''}
       </div>
+      ${demoCard(state.demo)}
       <div class="rounded-xl border border-white/10 p-4">
-        <div class="text-xs uppercase tracking-wide text-slate-400">Messaging themes</div>
+        <div class="flex items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400">Messaging themes</span><span class="ml-auto">${AITAG}</span></div>
         <div class="mt-2 flex flex-wrap gap-1.5">${(b.messaging_themes || []).map((t) => `<span class="text-xs rounded-full bg-amber-400/10 text-amber-200 px-2 py-0.5">${esc(t)}</span>`).join('')}</div>
         ${(b.watch_outs || []).length ? `<div class="mt-4 text-xs uppercase tracking-wide text-slate-400">Watch-outs</div><ul class="mt-1 list-disc list-inside text-sm text-slate-300">${b.watch_outs.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
       </div>
@@ -173,13 +227,70 @@ function renderBrief(raw) {
   $('#brief').classList.remove('hidden');
   const md = toMarkdown(b);
   $('#copy').onclick = () => navigator.clipboard.writeText(md).then(() => { $('#copy').textContent = 'Copied ✓'; });
-  $('#dl').onclick = () => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
-    a.download = `kindred-${slug(state.input.brand)}.md`;
-    a.click();
-  };
+  $('#dl').onclick = () => download(`kindred-${slug(state.input.brand)}.md`, md, 'text/markdown');
   renderCompare();
+  renderHow();
+}
+
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+const code = (t) => `<code class="block mt-1 break-all rounded bg-black/40 px-2 py-1 text-[11px] text-slate-300">${esc(t)}</code>`;
+const named = (list = [], n = 3) => list.slice(0, n).map((e) => `${esc(e.name)} (${shortId(e.id)}${typeof e.affinity === 'number' ? `, ${pct(e.affinity)}` : ''})`).join(', ') + (list.length > n ? `, +${list.length - n} more` : '');
+
+// "How this brief was built": the redacted request-to-result trace of this run, then the limits.
+function howSteps() {
+  const out = [];
+  const step = (title, body = '') => out.push(`<li class="rounded-lg border border-white/10 p-2.5"><div class="text-slate-200">${title}</div>${body}</li>`);
+  for (const { type, data = {} } of state.log) {
+    if (type === 'meta') step(`<b>Inputs</b> · ${esc([data.inputs?.brand, data.inputs?.market, data.inputs?.goal, data.inputs?.age].filter(Boolean).join(' · '))}`, `<div class="mt-1 text-slate-500">Started ${esc(String(data.started_at || '').replace('T', ' ').slice(0, 16))} UTC · agent model ${esc(data.model || 'n/a')}. Sent to Qloo: brand name, city, optional age band. No personal data.</div>`);
+    else if (type === 'entities') step(`${QTAG} <b>Resolve the brand</b> → ${data.results?.length ? named(data.results) : 'no match'}`, data.request ? code(data.request) : '');
+    else if (type === 'model_turn') step(`${AITAG} <b>Model turn ${(data.step ?? 0) + 1}</b>${data.model ? ` · ${esc(data.model)}` : ''} → ${(data.tool_calls || []).includes('submit_brief') ? 'submits the brief' : `calls ${esc(Object.entries((data.tool_calls || []).reduce((m, t) => ({ ...m, [t]: (m[t] || 0) + 1 }), {})).map(([t, n]) => (n > 1 ? `${t} ×${n}` : t)).join(', '))}`}`);
+    else if (type === 'affinities') step(`${QTAG} <b>${esc(LABEL[data.domain] || data.domain)} affinities</b>${data.location ? ` in ${esc(data.location)}` : ''} → ${data.results?.length || 0} results: ${named(data.results)}`, data.request ? code(data.request) : '');
+    else if (type === 'heatmap') step(`${QTAG} <b>Heatmap</b> of ${esc(data.location)} → ${data.total_cells ?? data.cells?.length ?? 0} cells${data.total_cells > (data.cells?.length || 0) ? ` (map shows the ${data.cells.length} warmest)` : ''}${(data.top || []).some((t) => t.area) ? `; hotspots named via OpenStreetMap: ${esc([...new Set(data.top.map((t) => t.area).filter(Boolean))].join(', '))}` : ''}`, data.request ? code(data.request) : '');
+    else if (type === 'demographics') step(`${QTAG} <b>Audience profile</b> → ${data.unavailable ? 'unavailable' : 'age and gender skew'}`, data.request ? code(data.request) : '');
+    else if (type === 'tool_error') step(`⚠️ <b>${esc(data.name)}</b> failed: ${esc(data.error)}`);
+    else if (type === 'brief') {
+      const P = data.provenance || state.brief?.provenance || {};
+      step(`✓ <b>Server check</b> → ${P.partners_verified ?? '?'}/${P.partners_total ?? '?'} partners and ${P.venues_verified ?? '?'}/${P.venues_total ?? '?'} venues matched to Qloo results${P.corrected ? `; ${P.corrected} model-quoted ${P.corrected === 1 ? 'affinity' : 'affinities'} replaced by Qloo's value` : ''}`);
+    } else if (type === 'baseline') {
+      step(`${AITAG} <b>LLM-only comparison</b> · ${esc(data.model || 'model')}, one call, no tools, no Qloo data → ${esc((data.llm_only || []).map((p) => p.partner).join(', '))}`);
+      step(`${QTAG} <b>Score the LLM-only picks</b> with the same audience query`, (data.requests || []).map((r) => `${code(r.request)}<div class="mt-0.5 text-slate-500">→ ${esc(r.result)}</div>`).join(''));
+    }
+  }
+  return out.join('');
+}
+
+function renderHow() {
+  if (!state.brief) return;
+  const el = $('#how');
+  const open = el.querySelector('details')?.open;
+  const date = state.meta?.started_at ? state.meta.started_at.slice(0, 10) : 'the time of the run';
+  el.classList.remove('hidden');
+  el.innerHTML = `<details${open ? ' open' : ''}>
+    <summary class="cursor-pointer select-none font-semibold">How this brief was built <span class="ml-1 text-xs font-normal text-slate-500">redacted request-to-result trace · data handling · limitations</span></summary>
+    <div class="mt-4 grid gap-5 lg:grid-cols-[1.6fr_1fr]">
+      <ol class="space-y-2 text-xs text-slate-400">${howSteps()}</ol>
+      <div class="space-y-4 text-xs text-slate-400">
+        <div><div class="text-slate-200 font-medium">Credentials</div><p class="mt-1">Every Qloo and model call runs on the server. The Qloo key travels only in a request header from the server; it never reaches the browser, this trace, the recordings or the logs.</p></div>
+        <div><div class="text-slate-200 font-medium">Data handling</div><p class="mt-1">Kindred sends Qloo a brand name, a city and an optional age band. It collects no personal data and stores no briefs on a server.</p></div>
+        <div><div class="text-slate-200 font-medium">What this brief does not establish</div><ul class="mt-1 list-disc pl-4 space-y-1">
+          <li>Affinities are aggregate: how much the audience of ${esc(state.input.brand)} over-indexes on an entity versus the average Qloo audience. They are not statements about any individual, not causal, and not a probability that anyone will buy or attend.</li>
+          <li>Only the top results per domain were retrieved, so an entity missing here is not evidence of low affinity.</li>
+          <li>Audience skews are relative indices, not a census. Never use them to make decisions about individuals.</li>
+          <li>Headline, concepts, plan, themes and watch-outs are AI interpretations. Check rights, availability, fit and brand safety before acting.</li>
+          <li>Neighbourhood names come from OpenStreetMap reverse geocoding of Qloo heatmap cells and can be approximate.</li>
+          <li>Results reflect Qloo data on ${esc(date)}${state.source === 'example' ? '; this is a replay of a recorded real run' : ''}.</li>
+        </ul></div>
+        <button id="dltrace" class="rounded-lg border border-white/15 px-3 py-2 text-xs text-slate-200 hover:border-white/40">Download trace (JSON)</button>
+      </div>
+    </div></details>`;
+  $('#dltrace').onclick = () => download(`kindred-trace-${slug(state.input.brand)}.json`, JSON.stringify(state.log, null, 1), 'application/json');
 }
 
 const STATUS = {

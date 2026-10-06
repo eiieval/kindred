@@ -1,5 +1,6 @@
 // Offline end-to-end and security checks of the API handler (no keys needed).
 process.env.MOCK = '1';
+process.env.QLOO_API_KEY = 'test-qloo-key-that-must-never-leak';
 const { default: handler } = await import('../api/agent.js');
 
 async function call({ method = 'POST', headers = {}, body = {} } = {}) {
@@ -22,6 +23,12 @@ const brief = events.find((e) => e.type === 'brief')?.data || {};
 const p0 = brief.partnerships?.[0] || {};
 expect('brief partners are verified against Qloo results', brief.provenance?.partners_verified === brief.partnerships?.length && p0.evidence?.id === 'mock-artist-0');
 expect("affinity shown is Qloo's, the model's own number is kept apart", p0.affinity === 0.99 && p0.model_affinity === 0.95);
+
+// 1a. Provenance: the stream carries the run's inputs, model turns and the redacted request of every Qloo call.
+const affEvents = events.filter((e) => e.type === 'affinities');
+expect('stream includes run metadata and model turns', types.includes('meta') && types.filter((t) => t === 'model_turn').length >= 2);
+expect('every Qloo result carries its redacted request', affEvents.length && affEvents.every((e) => e.data.request?.startsWith('GET /v2/insights?filter.type=urn:entity:')) && events.find((e) => e.type === 'heatmap')?.data.request);
+expect('the Qloo key never appears in the stream', !happy.out.includes(process.env.QLOO_API_KEY) && !/x-api-key/i.test(happy.out));
 
 // 1b. "LLM only" comparison: same limits, JSON answer, every pick scored or explained.
 const cmp = await call({ headers: { 'x-forwarded-for': '4.4.4.4' }, body: { mode: 'compare', brand: 'Patagonia', market: 'Barcelona', brand_ids: ['DB4CE34E-3A63-4947-946F-9D52502C5762'] } });

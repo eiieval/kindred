@@ -54,15 +54,17 @@
       <div class="space-y-6 min-w-0">
         <div id="brief" class="glass rounded-2xl p-5 hidden"></div>
         <div id="compare" class="glass rounded-2xl p-5 hidden"></div>
+        <div id="how" class="glass rounded-2xl p-5 hidden"></div>
         <div class="glass rounded-2xl p-5">
           <div class="flex flex-wrap items-center gap-3">
             <h2 class="font-semibold">Taste graph</h2>
+            <span class="prov prov-q" title="Returned by the Qloo API in this run">Qloo data</span>
             <div id="tabs" class="flex flex-wrap gap-1 ml-auto"></div>
           </div>
           <div id="grid" class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3"></div>
         </div>
         <div class="glass rounded-2xl p-5">
-          <h2 class="font-semibold">Where to activate</h2>
+          <div class="flex items-center gap-2"><h2 class="font-semibold">Where to activate</h2><span class="prov prov-q" title="Returned by the Qloo API in this run">Qloo data</span></div>
           <div id="map" class="mt-4 h-80 rounded-xl overflow-hidden"></div>
           <p id="mapnote" class="mt-2 text-xs text-slate-500"></p>
         </div>

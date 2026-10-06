@@ -13,3 +13,13 @@ select.field option { background: #0b0d12; }
 .pill { display: inline-block; font-size: .72rem; line-height: 1.1rem; border-radius: 9999px; padding: 0 .5rem; white-space: nowrap; }
 .stat { border-radius: .75rem; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.02); padding: .9rem 1rem; }
 .stat-k { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+/* Provenance labels: Qloo data vs AI interpretation. */
+.prov { display: inline-flex; align-items: center; gap: .25rem; font-size: .62rem; line-height: 1rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; border-radius: .35rem; padding: 0 .35rem; white-space: nowrap; }
+.prov-q { color: #5eead4; background: rgba(45,212,191,.12); border: 1px solid rgba(45,212,191,.3); }
+.prov-ai { color: #c4b5fd; background: rgba(139,92,246,.12); border: 1px solid rgba(139,92,246,.3); }
+.prov-q::before { content: ''; width: .35rem; height: .35rem; border-radius: 9999px; background: currentColor; }
+.prov-ai::before { content: ''; width: .35rem; height: .35rem; border-radius: .1rem; transform: rotate(45deg); background: currentColor; }
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: '▸'; display: inline-block; margin-right: .4rem; transition: transform .15s; color: #94a3b8; }
+details[open] > summary::before { transform: rotate(90deg); }
