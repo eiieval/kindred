@@ -79,7 +79,7 @@ const split = splitCompetitors(patagonia, [ent('The North Face', 'brand'), ent('
 expect('splitCompetitors keeps partners and explains each skip', split.kept.length === 1 && split.kept[0].name === 'GoPro' && split.skipped[0].name === 'The North Face' && /competitor of Patagonia/.test(split.skipped[0].reason));
 const screenAff = { brand: [{ ...ent("Arc'teryx", 'brand'), affinity: 0.96 }, { ...ent('GoPro', 'brand'), affinity: 0.958 }], podcast: [{ id: 'P', name: 'The Rich Roll Podcast', affinity: 0.975 }] };
 const draft = verifyBrief({ partnerships: [{ partner: 'GoPro', domain: 'brand' }, { partner: "Arc'teryx", domain: 'brand' }, { partner: 'The North Face', domain: 'brand' }, { partner: 'The Rich Roll Podcast', domain: 'podcast' }] }, screenAff);
-const screened = screenBrief(draft, patagonia, screenAff, [{ name: 'Mammut', id: 'M', affinity: 0.95, reason: 'r' }, { name: "Arc'teryx", id: "Arc'teryx", affinity: 0.96, reason: 'dup' }]);
+const screened = screenBrief(draft, patagonia, screenAff, [{ name: 'Mammut', id: 'M', affinity: 0.95, reason: 'r' }, { name: "Arc'teryx", id: "Arc'teryx", affinity: 0.96, reason: 'dup' }, { name: 'Mammut', id: 'M2', affinity: 0.94, reason: 'same name, other Qloo id' }]);
 expect('screenBrief removes proposed rivals (verified or not) and recounts provenance', screened.removed.map((x) => x.name).join() === "Arc'teryx,The North Face" && screened.brief.partnerships.map((p) => p.partner).join() === 'GoPro,The Rich Roll Podcast'
   && screened.brief.provenance.partners_total === 2 && screened.brief.provenance.partners_verified === 2);
 expect('skipped list: proposed first, then by affinity, no duplicates', screened.brief.skipped_competitors.map((x) => `${x.name}${x.proposed ? '*' : ''}`).join() === "Arc'teryx*,The North Face*,Mammut");
@@ -118,6 +118,8 @@ expect('hostile link content is reshaped to safe types', hostile.length === 2 &&
 
 // 7. Every recorded example is small and carries the brief and the LLM-only comparison.
 const examples = JSON.parse(read('public/examples/index.json'));
+// Rivals that earlier recordings proposed as partners (mock judging, round 1), kept as a regression list.
+const RIVALS = { 'patagonia-barcelona': ["Arc'teryx", 'The North Face', 'Fjällräven'], 'liquid-death-austin': ['Voodoo Ranger'], 'veja-paris': ['Osklen'], 'oatly-london': ['Ella Mills'], 'blue-bottle-tokyo': ['Fuglen Tokyo'] };
 for (const ex of examples) {
   const path = `public/examples/${ex.slug}.json`;
   const ok = existsSync(new URL(path, root));
@@ -126,6 +128,8 @@ for (const ex of examples) {
   const brief = ev.find((e) => e.type === 'brief')?.data;
   const base = ev.find((e) => e.type === 'baseline')?.data;
   expect(`example ${ex.slug}: ${Math.round(text.length / 1024)} KB, brief + LLM-only comparison`, ok && text.length < 60000 && brief?.partnerships?.length && base?.llm_only?.length);
+  const skippedNames = (brief?.skipped_competitors || []).map((x) => x.name);
+  expect(`example ${ex.slug}: no partner is a skipped or known direct competitor`, !(brief?.partnerships || []).some((p) => [...skippedNames, ...(RIVALS[ex.slug] || [])].some((n) => matchName(n, p.partner))));
   const link = await encodeShare(ev);
   expect(`example ${ex.slug}: share link ${link.length} chars`, link.length < 9000);
 }

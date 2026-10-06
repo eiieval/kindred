@@ -153,9 +153,10 @@ export function screenBrief(brief, brand, aff = {}, skipped = []) {
   const seen = new Set();
   // Proposed-then-removed partners first, then the candidates skipped before drafting, strongest first.
   out.skipped_competitors = [...removed, ...skipped].sort((a, b) => (b.proposed ? 1 : 0) - (a.proposed ? 1 : 0) || (b.affinity ?? 0) - (a.affinity ?? 0)).filter((s) => {
-    const k = s.id || normName(s.name);
-    if (seen.has(k)) return false;
-    seen.add(k);
+    // Qloo can hold two entities with one name (two Fjällräven ids): show each name once.
+    const keys = [s.id, normName(s.name)].filter(Boolean);
+    if (keys.some((k) => seen.has(k))) return false;
+    keys.forEach((k) => seen.add(k));
     return true;
   }).slice(0, 12);
   return { brief: out, removed };
