@@ -355,6 +355,7 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
   expect('README "Works both ways": every partner, affinity and hidden gem it names is in the recordings, the Angels were skipped at 97%, and the buyers line is there',
     claims.every((c) => held(...c)) && dodgers.skipped_competitors.some((s) => s.name === 'Los Angeles Angels' && Math.round(s.affinity * 100) === 97) && /## Works both ways/.test(readme)
     && readme.includes('Buyers: partnership and sponsorship teams at brands, clubs, promoters and agencies; what Kindred replaces is the desk research and panel step before a shortlist.'));
+  expect('the capture and totals scripts parse (they are not run by npm test)', ['scripts/social-card.js', 'scripts/gallery.js', 'scripts/totals.js'].every((p) => spawnSync(process.execPath, ['--check', fileURLToPath(new URL(p, root))]).status === 0));
   expect('every recorded example is in the warm list with its brand, market and goal, and the README counts the list', examples.every((ex) => warm.some((w) => w.brand === ex.brand && w.market === ex.market && w.goal === ex.goal)) && readme.includes(`pre-warms ${warm.length} subject/city pairs`));
 }
 
