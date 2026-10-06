@@ -6,7 +6,7 @@ Kindred is an AI agent for brand and partnership teams. Give it a brand, a marke
 
 Live demo: https://kindred-taste.vercel.app (no login). Built for the Qloo Agentic Hackathon. MIT licence.
 
-![Kindred brief for Veja in Paris: partners with Qloo affinities, provenance labels, audience skew and the comparison with an LLM alone](docs/screenshot.png)
+![Kindred brief for Patagonia in Barcelona, step 2 of the cover tour: partners matched to Qloo results with affinity and a Safe bet label for GoPro, provenance labels, and the rivals kept out](docs/screenshot.png)
 
 ## The problem
 

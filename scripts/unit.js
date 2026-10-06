@@ -225,6 +225,8 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
   expect('og.png is a 1200x630 PNG under 300 KB and icon-180.png is 180x180', og.ok && og.w === 1200 && og.h === 630 && og.kb < 300 && icon.ok && icon.w === 180 && icon.h === 180);
   expect('favicon.svg is an SVG with the brand gradient', read('public/favicon.svg').trimStart().startsWith('<svg') && /#d946ef/.test(read('public/favicon.svg')) && /#fbbf24/.test(read('public/favicon.svg')));
   expect("the strict CSP still covers the images (img-src 'self')", /img-src 'self'/.test(csp));
+  const shot = png('docs/screenshot.png');
+  expect('README screenshot is a 1280x800 viewport capture of the Patagonia brief, not the old Veja run', shot.ok && shot.w === 1280 && shot.h === 800 && /!\[[^\]]*Patagonia in Barcelona[^\]]*\]\(docs\/screenshot\.png\)/.test(read('README.md')));
 }
 
 // 13. Map framing: the hotspots and the cells near them, never the whole region (Barcelona's cells ran from Lleida to Girona).
