@@ -15,8 +15,21 @@ const expect = (label, ok) => { console.log(ok ? 'ok  ' : 'FAIL', label); if (!o
 
 // 1. Happy path streams every stage.
 const happy = await call({ body: { brand: 'Patagonia', market: 'Barcelona', goal: 'Pop-up activation' } });
-const types = happy.out.split('\n\n').filter(Boolean).map((b) => JSON.parse(b.replace(/^data: /, '')).type);
+const events = happy.out.split('\n\n').filter(Boolean).map((b) => JSON.parse(b.replace(/^data: /, '')));
+const types = events.map((e) => e.type);
 expect(`pipeline streams all stages (${types.length} events)`, ['tool_call', 'entities', 'affinities', 'heatmap', 'brief', 'done'].every((t) => types.includes(t)));
+const brief = events.find((e) => e.type === 'brief')?.data || {};
+const p0 = brief.partnerships?.[0] || {};
+expect('brief partners are verified against Qloo results', brief.provenance?.partners_verified === brief.partnerships?.length && p0.evidence?.id === 'mock-artist-0');
+expect("affinity shown is Qloo's, the model's own number is kept apart", p0.affinity === 0.99 && p0.model_affinity === 0.95);
+
+// 1b. "LLM only" comparison: same limits, JSON answer, every pick scored or explained.
+const cmp = await call({ headers: { 'x-forwarded-for': '4.4.4.4' }, body: { mode: 'compare', brand: 'Patagonia', market: 'Barcelona', brand_ids: ['DB4CE34E-3A63-4947-946F-9D52502C5762'] } });
+const base = cmp.status === 200 ? JSON.parse(cmp.out).baseline : null;
+const statuses = (base?.llm_only || []).map((p) => p.qloo.status);
+expect(`compare mode scores the LLM-only picks with Qloo (${statuses.join(', ')})`, statuses.length === 4 && statuses.includes('scored') && statuses.includes('not_returned'));
+expect('compare mode logs redacted Qloo requests', base?.requests?.some((r) => r.request.includes('filter.results.entities=')) && !/api[-_]?key/i.test(cmp.out));
+expect('compare mode needs valid Qloo ids (400)', (await call({ headers: { 'x-forwarded-for': '5.5.5.5' }, body: { mode: 'compare', brand: 'X', brand_ids: ['<script>'] } })).status === 400);
 
 // 2. Request hygiene.
 expect('GET is rejected (405)', (await call({ method: 'GET' })).status === 405);

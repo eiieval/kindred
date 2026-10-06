@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node dev-server.js",
     "build:css": "npx -y tailwindcss@3 -c tailwind.config.cjs -i styles/input.css -o public/styles.css --minify",
-    "test": "node scripts/mocktest.js",
+    "test": "node scripts/mocktest.js && node scripts/unit.js",
     "selftest": "node scripts/selftest.js",
     "examples": "node scripts/build-examples.js"
   },

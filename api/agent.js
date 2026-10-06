@@ -1,9 +1,11 @@
 import { runAgent } from '../lib/agent.js';
-import { publicMessage } from '../lib/errors.js';
+import { runBaseline } from '../lib/baseline.js';
+import { publicMessage, errorCode } from '../lib/errors.js';
 
 // Input allow-lists: anything else falls back to a default instead of reaching the model.
 const GOALS = ['Brand partnership or co-branded collab', 'Pop-up activation', 'Music or event sponsorship', 'Creator or talent partnership', 'Podcast or media sponsorship'];
 const AGES = ['35_and_younger', '36_to_55', '55_and_older'];
+const QLOO_ID = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/;
 
 // Abuse protection, per instance and best effort: protects the free API quotas behind the agent.
 const WINDOW_MS = 10 * 60 * 1000;
@@ -32,7 +34,14 @@ function deny(res, status, message, extra = {}) {
   res.end(message);
 }
 
+function json(res, status, data) {
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+  res.end(JSON.stringify(data));
+}
+
 // POST { brand, market, goal, age } -> Server-Sent Events stream of agent steps.
+// POST { mode: 'compare', brand, market, goal, age, brand_ids } -> JSON: the LLM-only baseline scored by Qloo.
+// Both modes share the per-IP limit and the concurrency cap.
 export default async function handler(req, res) {
   const h = req.headers || {};
   if (req.method !== 'POST') return deny(res, 405, 'POST only', { allow: 'POST' });
@@ -56,6 +65,20 @@ export default async function handler(req, res) {
   const age = AGES.includes(body.age) ? body.age : undefined;
   if (!brand) return deny(res, 400, 'brand is required');
 
+  if (body.mode === 'compare') {
+    const brandIds = (Array.isArray(body.brand_ids) ? body.brand_ids : []).map(String).filter((id) => QLOO_ID.test(id)).slice(0, 3);
+    if (!brandIds.length) return deny(res, 400, 'brand_ids are required');
+    running++;
+    try {
+      return json(res, 200, { baseline: await runBaseline({ brand, market, goal, age, brandIds }) });
+    } catch (e) {
+      if (!e?.public) console.error('[compare]', e);
+      return json(res, e?.status === 429 ? 429 : 502, { error: publicMessage(e), code: errorCode(e) });
+    } finally {
+      running--;
+    }
+  }
+
   running++;
   res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', connection: 'keep-alive' });
   const emit = (type, data) => res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
@@ -64,7 +87,7 @@ export default async function handler(req, res) {
     emit('done', {});
   } catch (e) {
     if (!e?.public) console.error('[agent]', e);
-    emit('error', { message: publicMessage(e) });
+    emit('error', { message: publicMessage(e), code: errorCode(e) });
   } finally {
     running--;
     res.end();

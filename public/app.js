@@ -1,14 +1,12 @@
+import { verifyBrief, compareSummary, brandIdsOf } from './js/core.js';
+
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const pct = (a) => (typeof a === 'number' ? `${Math.round(a * 100)}%` : '');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const slug = (s) => String(s || 'brief').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-const EXAMPLES = [
-  { slug: 'patagonia-barcelona', brand: 'Patagonia', market: 'Barcelona', goal: 'Brand partnership or co-branded collab' },
-  { slug: 'oatly-london', brand: 'Oatly', market: 'London', goal: 'Pop-up activation' },
-  { slug: 'liquid-death-austin', brand: 'Liquid Death', market: 'Austin', goal: 'Music or event sponsorship' },
-];
+let EXAMPLES = []; // recorded real runs, listed in examples/index.json
 const ICON = { find_entity: '🔎', get_affinities: '✨', get_heatmap: '🗺️', get_audience_profile: '👥' };
 const LABEL = { artist: 'Artists', brand: 'Brands', movie: 'Films', tv_show: 'TV', podcast: 'Podcasts', book: 'Books', videogame: 'Games', place: 'Venues', destination: 'Destinations', person: 'People' };
 
@@ -30,12 +28,14 @@ function setBusy(b) {
   btn.textContent = b ? 'Scouting…' : 'Scout';
 }
 
-function reset(input) {
-  state = { input, aff: {}, tab: null, brief: null };
+function reset(input, source = 'live') {
+  state = { input, source, aff: {}, tab: null, brief: null, baseline: null, heat: null, log: [] };
   $('#out').classList.remove('hidden');
   $('#trace').innerHTML = '';
   $('#brief').classList.add('hidden');
   $('#brief').innerHTML = '';
+  $('#compare').classList.add('hidden');
+  $('#compare').innerHTML = '';
   $('#tabs').innerHTML = '';
   $('#grid').innerHTML = '<p class="col-span-full text-sm text-slate-500">The agent is gathering taste signals…</p>';
   $('#mapnote').textContent = '';
@@ -59,17 +59,20 @@ function describe(name, a = {}) {
   return esc(name);
 }
 
-function handle({ type, data }) {
+function handle(ev) {
+  const { type, data } = ev;
+  state.log.push(ev);
   if (type === 'tool_call') trace(ICON[data.name] || '•', describe(data.name, data.args));
   else if (type === 'entities') trace('✓', data.results?.[0] ? `Matched <b>${esc(data.results[0].name)}</b>` : `No match for ${esc(data.query)}`, 'text-emerald-300/80');
   else if (type === 'affinities') {
     state.aff[data.domain] = data.results || [];
     if (!state.tab || state.tab === data.domain) showTab(data.domain); else renderTabs();
     if (data.domain === 'place') plotVenues(data.results || []);
-  } else if (type === 'heatmap') plotHeatmap(data);
+  } else if (type === 'heatmap') { state.heat = data; plotHeatmap(data); }
   else if (type === 'demographics') trace('✓', 'Audience profile ready', 'text-emerald-300/80');
   else if (type === 'tool_error') trace('⚠️', `${esc(data.name)}: ${esc(data.error)}`, 'text-amber-300/90');
   else if (type === 'brief') renderBrief(data);
+  else if (type === 'baseline') { state.baseline = data; renderCompare(); }
   else if (type === 'error') { trace('⛔', esc(data.message), 'text-rose-300'); setBusy(false); }
   else if (type === 'done') { trace('🏁', 'Brief ready', 'text-emerald-300'); setBusy(false); }
 }
@@ -106,7 +109,7 @@ function plotHeatmap({ location, cells = [], top = [] }) {
   cells.forEach((c) => L.circleMarker([c.lat, c.lng], { radius: 5 + 12 * (c.affinity ?? 0), color: color(c.affinity), weight: 0, fillOpacity: 0.45 }).addTo(layer));
   top.forEach((c, i) => L.marker([c.lat, c.lng], { title: c.area || `Hotspot ${i + 1}` }).bindPopup(`<b>${esc(c.area || `Hotspot ${i + 1}`)}</b><br>Affinity ${pct(c.affinity)}`).addTo(layer));
   map.fitBounds(L.latLngBounds(cells.map((c) => [c.lat, c.lng])).pad(0.1));
-  const names = top.map((c) => c.area).filter(Boolean);
+  const names = [...new Set(top.map((c) => c.area).filter(Boolean))];
   $('#mapnote').textContent = `Warmer = the audience over-indexes there (Qloo heatmap, ${location}).${names.length ? ` Top areas: ${names.join(', ')}.` : ''}`;
 }
 
@@ -131,7 +134,9 @@ function toMarkdown(b) {
   ].join('\n');
 }
 
-function renderBrief(b) {
+function renderBrief(raw) {
+  // Recordings made before server-side verification get the same check here.
+  const b = raw?.provenance ? raw : verifyBrief(raw, state.aff);
   state.brief = b;
   const A = b.activation || {};
   const partners = (b.partnerships || []).map((p) => `<div class="rounded-xl border border-white/10 bg-white/[.03] p-4">
@@ -174,11 +179,94 @@ function renderBrief(b) {
     a.download = `kindred-${slug(state.input.brand)}.md`;
     a.click();
   };
+  renderCompare();
+}
+
+const STATUS = {
+  scored: (p) => `<span class="pill bg-white/10 text-slate-200">Qloo affinity ${pct(p.qloo.affinity)}</span>`,
+  not_returned: () => `<span class="pill bg-amber-400/10 text-amber-200">No Qloo affinity returned for ${esc(state.input.market || 'this market')}</span>`,
+  not_found: () => '<span class="pill bg-white/5 text-slate-400">Not found in Qloo</span>',
+  unchecked: () => '<span class="pill bg-white/5 text-slate-400">Not checked (rate limited)</span>',
+};
+
+function renderCompare() {
+  const el = $('#compare');
+  if (!state.brief) return;
+  const b = state.baseline;
+  if (!b) {
+    if (state.source !== 'live') return;
+    el.classList.remove('hidden');
+    el.innerHTML = `<div class="flex flex-wrap items-center gap-3"><h2 class="font-semibold">With Qloo vs LLM only</h2>
+      <button id="cmpgo" class="ml-auto text-xs rounded-lg bg-white text-black px-3 py-2 font-medium disabled:opacity-60">Run the LLM-only comparison</button></div>
+      <p class="mt-2 text-sm text-slate-400">Ask the same model for partners with the same brand, market and goal but no Qloo data, then let Qloo score both answers for this audience. One extra model call and a few Qloo lookups; it counts toward the demo limit.</p>
+      <p id="cmperr" class="mt-2 text-sm text-amber-300/90"></p>`;
+    $('#cmpgo').onclick = runCompare;
+    return;
+  }
+  const s = compareSummary(state.brief, b);
+  const market = state.input.market || 'the market';
+  const areas = [...new Set((state.heat?.top || []).map((c) => c.area).filter(Boolean))];
+  const llmRows = s.llm_only.map((p) => `<li class="rounded-lg border border-white/10 p-3">
+      <div class="flex flex-wrap items-center gap-2"><span class="font-medium">${esc(p.partner)}</span><span class="text-[11px] uppercase tracking-wide text-slate-500">${esc(LABEL[p.domain] || p.domain)}</span>
+      <span class="ml-auto">${(STATUS[p.qloo.status] || STATUS.not_found)(p)}</span></div>
+      ${p.why ? `<p class="mt-1 text-xs text-slate-400">${esc(p.why)}</p>` : ''}</li>`).join('');
+  const kRows = s.kindred.map((k) => `<li class="rounded-lg border border-fuchsia-400/20 bg-fuchsia-500/[.04] p-3">
+      <div class="flex flex-wrap items-center gap-2"><span class="font-medium">${esc(k.partner)}</span><span class="text-[11px] uppercase tracking-wide text-slate-500">${esc(LABEL[k.domain] || k.domain)}</span>
+      <span class="ml-auto">${typeof k.affinity === 'number' ? `<span class="pill bg-fuchsia-500/15 text-fuchsia-200">Qloo affinity ${pct(k.affinity)}</span>` : '<span class="pill bg-white/5 text-slate-400">Not verified in Qloo</span>'}</span></div>
+      <p class="mt-1 text-xs ${k.also_llm ? 'text-slate-500' : 'text-emerald-300/90'}">${k.also_llm ? 'Also named by the LLM alone' : 'Non-obvious: the LLM alone did not name it'}</p></li>`).join('');
+  const unsupported = s.llm_not_returned + s.llm_not_found;
+  el.classList.remove('hidden');
+  el.innerHTML = `<div class="flex flex-wrap items-baseline gap-2"><h2 class="font-semibold">With Qloo vs LLM only</h2>
+      <span class="text-xs text-slate-500">same model · same brand, market and goal · both scored by the same Qloo query</span></div>
+    <div class="mt-4 grid gap-3 sm:grid-cols-3">
+      <div class="stat"><div class="stat-k">Average Qloo affinity of the picks</div>
+        <div class="mt-1 text-2xl font-bold">${s.kindred_avg !== null ? pct(s.kindred_avg) : 'n/a'} <span class="text-sm font-normal text-slate-400">Kindred</span></div>
+        <div class="text-sm text-slate-400">vs ${s.llm_avg !== null ? pct(s.llm_avg) : 'n/a'} LLM only <span class="text-slate-500">(${s.llm_scored} of ${s.llm_only.length} scored)</span></div></div>
+      <div class="stat"><div class="stat-k">Kindred picks the LLM alone missed</div>
+        <div class="mt-1 text-2xl font-bold">${s.non_obvious} <span class="text-sm font-normal text-slate-400">of ${s.kindred.length}</span></div>
+        <div class="text-sm text-slate-400">found through Qloo affinities</div></div>
+      <div class="stat"><div class="stat-k">LLM-only picks Qloo could not support</div>
+        <div class="mt-1 text-2xl font-bold">${unsupported} <span class="text-sm font-normal text-slate-400">of ${s.llm_only.length}</span></div>
+        <div class="text-sm text-slate-400">no affinity for this audience in ${esc(market)}, or not in Qloo</div></div>
+    </div>
+    <div class="mt-4 grid gap-4 md:grid-cols-2">
+      <div class="rounded-xl border border-dashed border-white/15 p-4">
+        <div class="text-xs uppercase tracking-wide text-slate-400">LLM only · no Qloo data</div>
+        <p class="mt-1 text-xs text-slate-500">${esc(b.model || 'The model')} answered from general knowledge, with no tools.</p>
+        <ol class="mt-3 space-y-2 text-sm">${llmRows}</ol>
+        ${b.neighbourhoods?.length ? `<p class="mt-3 text-xs text-slate-400"><b class="text-slate-300">Where:</b> ${esc(b.neighbourhoods.join(', '))} <span class="text-slate-500">(a guess, no location data)</span></p>` : ''}
+      </div>
+      <div class="rounded-xl border border-fuchsia-400/30 p-4">
+        <div class="text-xs uppercase tracking-wide text-fuchsia-300/80">Kindred · grounded in Qloo</div>
+        <p class="mt-1 text-xs text-slate-500">Partners chosen from this audience's Qloo affinities in ${esc(market)}.</p>
+        <ol class="mt-3 space-y-2 text-sm">${kRows}</ol>
+        ${areas.length ? `<p class="mt-3 text-xs text-slate-400"><b class="text-slate-300">Where:</b> ${esc(areas.join(', '))} <span class="text-slate-500">(Qloo heatmap hotspots)</span></p>` : ''}
+      </div>
+    </div>
+    <p class="mt-3 text-xs text-slate-500">Affinity is how strongly the audience of ${esc(state.input.brand)} over-indexes on an entity compared with the average Qloo audience: an aggregate signal, not a statement about any person, and not a forecast of campaign results. "No affinity returned" means Qloo gave no score for that entity with this audience and market.</p>`;
+}
+
+async function runCompare() {
+  const btn = $('#cmpgo');
+  btn.disabled = true;
+  btn.textContent = 'Asking the model without Qloo…';
+  try {
+    const res = await fetch('/api/agent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'compare', ...state.input, brand_ids: brandIdsOf(state.log) }) });
+    const text = await res.text();
+    let j = {};
+    try { j = JSON.parse(text); } catch { j = { error: text }; }
+    if (!res.ok || !j.baseline) throw Object.assign(new Error(j.error || `HTTP ${res.status}`), { code: j.code || (res.status === 429 || res.status === 503 ? 'rate_limited' : '') });
+    handle({ type: 'baseline', data: j.baseline });
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Try again';
+    $('#cmperr').textContent = e.code === 'rate_limited' ? `${e.message} The recorded examples above include this comparison.` : e.message;
+  }
 }
 
 async function run(input) {
-  reset(input);
-  if (!input.slug) history.replaceState(null, '', `?${new URLSearchParams({ brand: input.brand, market: input.market || '' })}`);
+  reset(input, input.slug ? 'example' : 'live');
+  history.replaceState(null, '', `?${new URLSearchParams(input.slug ? { example: input.slug } : { brand: input.brand, market: input.market || '' })}`);
   try {
     if (input.slug) {
       const r = await fetch(`examples/${input.slug}.json`);
@@ -216,20 +304,30 @@ $('#f').addEventListener('submit', (ev) => {
   run({ brand: String(f.get('brand')).trim(), market: String(f.get('market')).trim(), goal: f.get('goal'), age: f.get('age') || undefined });
 });
 
-$('#examples').innerHTML = `<span class="text-slate-500 mr-1">Try:</span>${EXAMPLES.map((e, i) => `<button data-i="${i}" class="rounded-full border border-white/10 px-3 py-1 text-slate-300 hover:border-white/40">${esc(e.brand)} · ${esc(e.market)}</button>`).join('')}`;
-$('#examples').querySelectorAll('button').forEach((b) => {
-  b.onclick = () => {
-    const e = EXAMPLES[b.dataset.i];
-    const f = $('#f');
-    f.brand.value = e.brand;
-    f.market.value = e.market;
-    f.goal.value = e.goal;
-    run({ ...e });
-  };
+function openExample(e) {
+  const f = $('#f');
+  f.brand.value = e.brand;
+  f.market.value = e.market;
+  f.goal.value = e.goal;
+  f.age.value = e.age || '';
+  run({ ...e });
+}
+
+const exampleButtons = () => EXAMPLES.map((e, i) => `<button type="button" data-ex="${i}" class="rounded-full border border-white/10 px-3 py-1 text-slate-300 hover:border-white/40" title="${esc(e.industry || '')}">${esc(e.brand)} · ${esc(e.market)}</button>`).join('');
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest?.('[data-ex]');
+  if (b && EXAMPLES[b.dataset.ex]) openExample(EXAMPLES[b.dataset.ex]);
 });
 
-// Shareable links: ?brand=Patagonia&market=Barcelona runs that brief on load.
+// Links: ?example=<slug> replays a recorded real run; ?brand=Patagonia&market=Barcelona runs a live brief.
 const params = new URLSearchParams(location.search);
+fetch('examples/index.json').then((r) => r.json()).then((list) => {
+  EXAMPLES = Array.isArray(list) ? list : [];
+  $('#examples').innerHTML = `<span class="text-slate-500 mr-1">Recorded real runs:</span>${exampleButtons()}`;
+  const ex = EXAMPLES.find((e) => e.slug === params.get('example'));
+  if (ex) openExample(ex);
+}).catch(() => {});
+
 if (params.get('brand')) {
   const f = $('#f');
   f.brand.value = params.get('brand').slice(0, 80);
