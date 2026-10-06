@@ -90,7 +90,11 @@ function handle(ev) {
   } else if (type === 'heatmap') { state.heat = data; plotHeatmap(data); }
   else if (type === 'demographics') { state.demo = data; trace('✓', 'Audience profile ready', 'text-emerald-300/80'); }
   else if (type === 'tool_error') trace('⚠️', `${esc(data.name)}: ${esc(data.error)}`, 'text-amber-300/90');
-  else if (type === 'competitors') trace('🚫', `Skipped ${(data.skipped || []).length} direct competitor${(data.skipped || []).length === 1 ? '' : 's'} by Qloo tags: ${esc((data.skipped || []).slice(0, 3).map((x) => x.name).join(', '))}${(data.skipped || []).length > 3 ? '…' : ''}`, 'text-slate-400');
+  else if (type === 'competitors') {
+    // Qloo can return the same brand as two entities (one per domain): count names, not entities.
+    const names = [...new Set((data.skipped || []).map((x) => x.name))];
+    trace('🚫', `Skipped ${names.length} direct competitor${names.length === 1 ? '' : 's'} by Qloo tags: ${esc(names.slice(0, 3).join(', '))}${names.length > 3 ? '…' : ''}`, 'text-slate-400');
+  }
   else if (type === 'guardrail') trace('🛡️', `Server check rejected ${esc((data.rejected || []).map((x) => x.name).join(', '))} as a direct competitor; the model revises the brief`, 'text-amber-300/90');
   else if (type === 'brief') renderBrief(data);
   else if (type === 'baseline') { state.baseline = data; renderCompare(); renderHow(); }
@@ -176,7 +180,7 @@ function skewRows(obj = {}, labels = {}) {
 function demoCard(d) {
   if (!d || d.unavailable || (!d.age && !d.gender)) return '';
   return `<div class="rounded-xl border border-white/10 p-4">
-    <div class="flex items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400">Audience skew</span><span class="ml-auto">${QTAG}</span></div>
+    <div class="flex flex-wrap items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400 whitespace-nowrap">Audience skew</span><span class="ml-auto">${QTAG}</span></div>
     <div class="mt-3 space-y-1.5">${skewRows(d.age, AGE)}</div>
     ${d.gender ? `<div class="mt-3 space-y-1.5">${skewRows(d.gender)}</div>` : ''}
     <p class="mt-3 text-[11px] text-slate-500">Over (+) or under (−) index of this brand's audience versus the average Qloo audience. Aggregate, not a census and not about individuals.</p></div>`;
@@ -189,7 +193,7 @@ function renderBrief(raw) {
   const A = b.activation || {};
   const P = b.provenance || {};
   const partners = (b.partnerships || []).map((p) => `<div class="rounded-xl border ${p.evidence ? 'border-white/10' : 'border-amber-400/40'} bg-white/[.03] p-4">
-      <div class="flex items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400">${esc(LABEL[p.domain] || p.domain)}</span>
+      <div class="flex flex-wrap items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400 whitespace-nowrap">${esc(LABEL[p.domain] || p.domain)}</span>
       ${p.evidence ? `<span class="ml-auto text-xs rounded-full bg-fuchsia-500/15 text-fuchsia-200 px-2 py-0.5">${pct(p.affinity)} affinity</span>` : '<span class="ml-auto text-xs rounded-full bg-amber-400/10 text-amber-200 px-2 py-0.5">unverified</span>'}</div>
       <div class="mt-1 text-lg font-semibold">${esc(p.partner)}</div>
       <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">${p.evidence ? `${QTAG}<span>matched Qloo entity ${shortId(p.evidence.id)}</span>` : '<span class="text-amber-200/90">Not found in this run\'s Qloo results: treat as an unverified suggestion.</span>'}</div>
@@ -226,7 +230,7 @@ function renderBrief(raw) {
     ${skipNote}
     <div class="mt-5 grid grid-cols-1 gap-4 ${demoCard(state.demo) ? 'lg:grid-cols-[1.3fr_1fr_1fr]' : 'md:grid-cols-[1.4fr_1fr]'}">
       <div class="rounded-xl border border-white/10 p-4">
-        <div class="flex items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400">Activation${A.city ? ` · ${esc(A.city)}` : ''}</span><span class="ml-auto">${AITAG}</span></div>
+        <div class="flex flex-wrap items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400 whitespace-nowrap">Activation${A.city ? ` · ${esc(A.city)}` : ''}</span><span class="ml-auto">${AITAG}</span></div>
         <p class="mt-2 text-sm text-slate-200">${esc(A.plan)}</p>
         ${venues.length ? `<div class="mt-3 flex items-center gap-2"><span class="text-[11px] uppercase tracking-wide text-slate-500">Venues</span>${QTAG}</div>
         <div class="mt-1.5 flex flex-wrap gap-1.5">${venues.map((v) => (v.evidence
@@ -235,7 +239,7 @@ function renderBrief(raw) {
       </div>
       ${demoCard(state.demo)}
       <div class="rounded-xl border border-white/10 p-4">
-        <div class="flex items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400">Messaging themes</span><span class="ml-auto">${AITAG}</span></div>
+        <div class="flex flex-wrap items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400 whitespace-nowrap">Messaging themes</span><span class="ml-auto">${AITAG}</span></div>
         <div class="mt-2 flex flex-wrap gap-1.5">${(b.messaging_themes || []).map((t) => `<span class="text-xs rounded-full bg-amber-400/10 text-amber-200 px-2 py-0.5">${esc(t)}</span>`).join('')}</div>
         ${(b.watch_outs || []).length ? `<div class="mt-4 text-xs uppercase tracking-wide text-slate-400">Watch-outs</div><ul class="mt-1 list-disc list-inside text-sm text-slate-300">${b.watch_outs.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}
       </div>
