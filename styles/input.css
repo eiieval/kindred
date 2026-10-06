@@ -30,3 +30,23 @@ details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
 details > summary::before { content: '▸'; display: inline-block; margin-right: .4rem; transition: transform .15s; color: #94a3b8; }
 details[open] > summary::before { transform: rotate(90deg); }
+
+/* Cover tour, status dot, inline link button. Plain CSS so it works without rebuilding Tailwind. */
+.dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 9999px; margin-right: .4rem; }
+.dot-ok { background: #34d399; }
+.dot-warn { background: #fbbf24; }
+.linkbtn { text-decoration: underline; color: #e2e8f0; background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
+.linkbtn:hover { color: #fff; }
+.tour[hidden] { display: none; }
+.tour { position: fixed; left: .75rem; right: .75rem; bottom: .75rem; max-width: 34rem; margin: 0 auto; z-index: 2000; background: #12141c; border: 1px solid rgba(232,121,249,.55); border-radius: 1rem; padding: .8rem 1rem; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+.tour-k { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: #e879f9; }
+.tour-t { margin-top: .15rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.tour-p { margin-top: .25rem; font-size: .8rem; line-height: 1.35; color: #94a3b8; }
+.tour-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .6rem; }
+.tour-next, .tour-skip { border-radius: .6rem; padding: .45rem .9rem; font-size: .8rem; font-weight: 600; cursor: pointer; }
+.tour-next { background: #fff; color: #000; border: 0; }
+.tour-skip { background: none; color: #cbd5e1; border: 1px solid rgba(255,255,255,.2); }
+.tour-hl { outline: 2px solid rgba(232,121,249,.75); outline-offset: 4px; scroll-margin-top: 1rem; }
+body.touring { padding-bottom: 11rem; }
+.hero-line { margin-top: 1.25rem; max-width: 42rem; font-size: 1.05rem; line-height: 1.45; color: #e2e8f0; font-weight: 500; }
+.hero-stat { margin-top: .5rem; max-width: 42rem; font-size: .8rem; color: #5eead4; }

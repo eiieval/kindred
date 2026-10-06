@@ -1,4 +1,5 @@
-import { verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, brandIdsOf } from './js/core.js';
+import { tourSteps, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, brandIdsOf } from './js/core.js';
+import { startTour, tourSeen } from './js/tour.js';
 import { encodeShare, decodeShare } from './js/share.js';
 
 const $ = (s) => document.querySelector(s);
@@ -77,7 +78,8 @@ function handle(ev) {
     state.meta = data;
     const day = esc(String(data.started_at || '').slice(0, 10));
     if (state.source === 'example') trace('🎞️', `Replay of a real run recorded ${day}. No API calls.`, 'text-slate-400');
-    if (state.source === 'cache') trace('⚡', `Served from cache · computed ${day}. Same agent and Qloo data, no new API calls. <button type="button" data-live class="underline text-slate-200 hover:text-white">Run live</button>`, 'text-slate-400');
+    if (state.source === 'cache' && Date.now() - Date.parse(data.started_at) < 90000) state.source = 'live';
+    if (state.source === 'cache') trace('⚡', `Served from cache · computed ${day}. Same agent and Qloo data, no new API calls. <button type="button" data-live class="linkbtn">Run live</button>`, 'text-slate-400');
     if (state.source === 'shared') trace('🔗', `Shared snapshot of a run from ${day}, decoded from the link. Not re-run, no API calls.`, 'text-slate-400');
   } else if (type === 'model_turn') {
     const n = (data.tool_calls || []).filter((t) => t !== 'submit_brief').length;
@@ -506,13 +508,13 @@ $('#f').addEventListener('submit', (ev) => {
   run({ brand: String(f.get('brand')).trim(), market: String(f.get('market')).trim(), goal: f.get('goal'), age: f.get('age') || undefined });
 });
 
-function openExample(e) {
+async function openExample(e) {
   const f = $('#f');
   f.brand.value = e.brand;
   f.market.value = e.market;
   f.goal.value = e.goal;
   f.age.value = e.age || '';
-  run({ ...e });
+  await run({ ...e });
 }
 
 const exampleButtons = () => EXAMPLES.map((e, i) => `<button type="button" data-ex="${i}" class="rounded-full border border-white/10 px-3 py-1 text-slate-300 hover:border-white/40" title="${esc(e.industry || '')}">${esc(e.brand)} · ${esc(e.market)}</button>`).join('');
@@ -532,7 +534,7 @@ $('#f').addEventListener('focusin', async () => {
     const ok = h.qloo === 'ok' && h.llm === 'ok';
     const el = $('#status');
     el.classList.remove('hidden');
-    el.innerHTML = `<span class="inline-block h-2 w-2 rounded-full ${ok ? 'bg-emerald-400' : 'bg-amber-400'} mr-1.5"></span>${ok ? 'Live agent ready' : 'Live data is under pressure: the recorded runs above always work'}`;
+    el.innerHTML = `<span class="dot ${ok ? 'dot-ok' : 'dot-warn'}"></span>${ok ? 'Live agent ready' : 'Live data is under pressure: the recorded runs above always work'}`;
   } catch { /* status is optional */ }
 });
 
@@ -544,6 +546,7 @@ fetch('examples/index.json').then((r) => r.json()).then((list) => {
   document.querySelectorAll('[data-exlist]').forEach((el) => { el.innerHTML = exampleButtons(); });
   const ex = EXAMPLES.find((e) => e.slug === params.get('example'));
   if (ex) openExample(ex);
+  maybeTour();
 }).catch(() => {});
 
 async function openShared(token) {
@@ -571,4 +574,23 @@ else if (params.get('brand')) {
   f.brand.value = params.get('brand').slice(0, 80);
   f.market.value = (params.get('market') || '').slice(0, 80);
   f.requestSubmit();
+}
+
+// Cover: a first visit with no link parameters replays the Patagonia run (static JSON only, no API calls) and walks
+// through it in three captions. ?tour=1 forces it again; localStorage keeps it from repeating.
+async function maybeTour() {
+  const forced = params.get('tour') === '1';
+  const plain = !params.get('brand') && !params.get('example') && !location.hash.startsWith('#b=');
+  if (!(forced || (plain && !tourSeen()))) return;
+  const ex = EXAMPLES.find((e) => e.slug === 'patagonia-barcelona') || EXAMPLES[0];
+  if (!ex) return;
+  if (!state || forced) await openExample(ex);
+  startTour(tourSteps(ex), {
+    onEnd: () => {
+      const f = $('#f');
+      f.reset();
+      window.scrollTo(0, 0);
+      f.brand.focus({ preventScroll: true });
+    },
+  });
 }

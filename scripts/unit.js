@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { brotliDecompressSync } from 'node:zlib';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { matchName, sameName, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, compactEvents, brandIdsOf, competitorCheck, splitCompetitors, screenBrief } from '../public/js/core.js';
+import { tourSteps, matchName, sameName, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, compactEvents, brandIdsOf, competitorCheck, splitCompetitors, screenBrief } from '../public/js/core.js';
 import { profileOf } from '../lib/qloo.js';
 import { parsePicks, toDomain } from '../lib/baseline.js';
 import { encodeShare, decodeShare, sanitizeEvents } from '../public/js/share.js';
@@ -179,7 +179,7 @@ const csp = JSON.parse(read('vercel.json')).headers[0].headers.find((h) => h.key
 expect("no Google Fonts in the page or the CSP, font-src 'self'", !/googleapis|gstatic/.test(read('public/index.html') + csp + read('public/styles.css')) && /font-src 'self'/.test(csp));
 
 // 9. Browser scripts parse (a stray quote in a template breaks the whole page, and no other check loads app.js).
-expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/js/share.js'].every((p) => spawnSync(process.execPath, ['--check', fileURLToPath(new URL(p, root))]).status === 0));
+expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/js/share.js', 'public/js/tour.js'].every((p) => spawnSync(process.execPath, ['--check', fileURLToPath(new URL(p, root))]).status === 0));
 
 
 // 10. Warm list: every entry is valid input and builds the same URL the page requests.
@@ -191,6 +191,18 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
   expect('warm list entries survive input cleaning unchanged', list.every((e) => { const c = briefInput(e); return c.brand === e.brand && c.market === e.market && c.goal === e.goal; }));
   expect('warm URL matches the page query (brand, market, goal, age order)', warmUrl('https://x.test/', { brand: "Ben & Jerry's", market: 'London', goal: GOALS[0] }) === `https://x.test/api/brief?brand=Ben+%26+Jerry%27s&market=London&goal=${encodeURIComponent(GOALS[0]).replace(/%20/g, '+')}&age=`);
   expect('page builds its cache query the same way', /new URLSearchParams\(\{ brand: input\.brand, market: input\.market \|\| '', goal: input\.goal \|\| '', age: input\.age \|\| '' \}\)/.test(read('public/app.js')));
+}
+
+// 11. Cover tour: three captions pointing at blocks that exist, headline and metric present, no load-time API calls.
+{
+  const html = read('public/index.html');
+  const steps = tourSteps({ brand: 'Patagonia', market: 'Barcelona' });
+  expect('tour has 3 steps with the brand and the city, each pointing at an existing id', steps.length === 3 && /Patagonia/.test(steps[0].title) && /Barcelona/.test(steps[2].title) && steps.every((x) => html.includes(`id="${x.selector.slice(1)}"`)));
+  expect('tour steps survive missing input and long names', tourSteps({}).length === 3 && tourSteps({ brand: 'x'.repeat(500) })[0].title.length < 200);
+  expect('cover has the one-line pitch, the recorded-runs metric and the tour caption region', /Agents, but with taste/.test(html) && /21 of 28 picks/.test(html) && /id="tour"/.test(html) && /21 of the model's 28/.test(read('README.md')));
+  expect('tour is local only: no network calls in tour.js, storage failures are caught', !/fetch\(/.test(read('public/js/tour.js')) && /catch/.test(read('public/js/tour.js')));
+  expect('tour caption is fixed at the bottom with a CSP-safe stylesheet (no inline script)', /\.tour \{ position: fixed/.test(read('styles/input.css')) && !/<script(?![^>]*src=)/.test(html));
+  expect('mobile: the caption fits a 320 px viewport (left/right margins, max-width)', /\.tour \{[^}]*left: \.75rem; right: \.75rem;[^}]*max-width: 34rem/.test(read('styles/input.css')));
 }
 
 console.log(failed ? `${failed} check(s) failed` : 'all unit checks passed');

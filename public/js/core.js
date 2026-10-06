@@ -278,3 +278,14 @@ export function compactEvents(events, { cells = 300, perDomain = 8, images = tru
     return { type, data };
   });
 }
+
+// The three-step cover tour: which block each caption points at (ids that exist in index.html) and what it says.
+export function tourSteps(ex = {}) {
+  const brand = String(ex.brand || 'this brand').slice(0, 80);
+  const city = String(ex.market || 'the city').slice(0, 80);
+  return [
+    { selector: '#grid', title: `1 · The audience of ${brand}, read with Qloo Taste AI`, text: 'What this audience already loves across artists, brands, film, podcasts and places. Every card is Qloo data.' },
+    { selector: '#brief', title: '2 · Partners they already love, rivals kept out', text: 'Each pick is checked against Qloo results, and direct competitors are removed before the brief is written.' },
+    { selector: '#map', title: `3 · Where to meet them in ${city}`, text: 'The heatmap shows where this audience over-indexes, with venues from Qloo.' },
+  ];
+}
