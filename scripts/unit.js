@@ -340,6 +340,21 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
     && readme.includes(`All ${t.kindred_city_present} of Kindred's partners appear in Qloo's data for their city; ${t.llm_city_present} of the model's ${t.llm_city_checked} picks do, and ${t.llm_not_in_qloo} are not in Qloo at all.`)
     && readme.includes(`None of Kindred's ${t.kindred_total} partners was named by the model alone.`) && t.runs.every((r) => readme.includes(tableRow(r))));
   expect('social card quotes the same totals', card.includes(`<div class="v">${t.llm_unsupported} of ${t.llm_total}</div>`) && card.includes(`across ${t.examples} recorded runs`));
+  // "Works both ways" in the README names partners and affinities: they must be what the recordings hold.
+  const claims = [['bad-bunny-miami', 'Louis Vuitton', 'Louis Vuitton', 96], ['bad-bunny-miami', 'Reebok', 'Reebok', 96], ['bad-bunny-miami', 'Rolex', 'Rolex', 95],
+    ['los-angeles-dodgers-los-angeles', 'SeatGeek', 'SeatGeek', 93, 'Hidden gem'], ['los-angeles-dodgers-los-angeles', 'Los Angeles Times', 'Los Angeles Times', 93], ['los-angeles-dodgers-los-angeles', 'Tiffany & Co.', 'Tiffany & Co.', 95],
+    ['coachella-los-angeles', 'Iheartradio', 'iHeartRadio', 95], ['coachella-los-angeles', 'Urban Outfitters', 'Urban Outfitters', 96], ['coachella-los-angeles', 'Born This Way Foundation', 'Born This Way Foundation', 94, 'Hidden gem']];
+  const held = (slug, name, shown, pc, gem) => {
+    const ev = JSON.parse(read(`public/examples/${slug}.json`));
+    const aff = {};
+    for (const e of ev) if (e.type === 'affinities') aff[e.data.domain] = e.data.results;
+    const p = ev.find((e) => e.type === 'brief').data.partnerships.find((x) => x.partner === name);
+    return Boolean(p?.evidence) && Math.round(p.affinity * 100) === pc && (!gem || partnerReach(p, aff)?.label === gem) && readme.includes(`${shown} (${pc}%${gem ? ', a hidden gem' : ''}`);
+  };
+  const dodgers = JSON.parse(read('public/examples/los-angeles-dodgers-los-angeles.json')).find((e) => e.type === 'brief').data;
+  expect('README "Works both ways": every partner, affinity and hidden gem it names is in the recordings, the Angels were skipped at 97%, and the buyers line is there',
+    claims.every((c) => held(...c)) && dodgers.skipped_competitors.some((s) => s.name === 'Los Angeles Angels' && Math.round(s.affinity * 100) === 97) && /## Works both ways/.test(readme)
+    && readme.includes('Buyers: partnership and sponsorship teams at brands, clubs, promoters and agencies; what Kindred replaces is the desk research and panel step before a shortlist.'));
   expect('every recorded example is in the warm list with its brand, market and goal, and the README counts the list', examples.every((ex) => warm.some((w) => w.brand === ex.brand && w.market === ex.market && w.goal === ex.goal)) && readme.includes(`pre-warms ${warm.length} subject/city pairs`));
 }
 

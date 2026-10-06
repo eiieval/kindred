@@ -37,6 +37,16 @@ Partnerships, sponsorships and pop-ups are usually picked by gut feeling, by who
 | Review and judgement | included above | 30-60 min |
 | **Total** | **roughly 1-1.5 working days** | **under 1 hour** |
 
+## Works both ways
+
+A brand looks for partners and places. An artist, a team, a festival or a venue looks for the sponsors its audience already wants. It is the same engine and the same checks: type the name in the subject field (brand, artist, team, festival or venue), pick a city and, for the second direction, the goal "Sponsors for an artist, team or event". Three recorded runs (affinities are Qloo's, each partner is matched to a Qloo entity of that run):
+
+- **Bad Bunny · Miami** (an artist, `/?example=bad-bunny-miami`): sponsors Louis Vuitton (96%), Reebok (96%) and Rolex (95%), activated around Kaseya Center and Bayside Marketplace. 3 of the 4 picks the model made without Qloo have no Qloo support for this audience.
+- **Los Angeles Dodgers · Los Angeles** (a team, `/?example=los-angeles-dodgers-los-angeles`): SeatGeek (93%, a hidden gem), the Los Angeles Times (93%) and Tiffany & Co. (95%). A team's audience also loves other teams, which are not sponsors: Qloo lists the Angels (97%) as a Dodgers competitor, so they are skipped, and the agent is told that other teams and leagues are not sponsor candidates.
+- **Coachella Music Festival · Los Angeles** (a festival, `/?example=coachella-los-angeles`): Urban Outfitters (96%), iHeartRadio (95%) and the Born This Way Foundation (94%, a hidden gem).
+
+**Who pays.** Buyers: partnership and sponsorship teams at brands, clubs, promoters and agencies; what Kindred replaces is the desk research and panel step before a shortlist.
+
 ## With Qloo vs LLM only
 
 Every brief can be compared with what the same model says without Qloo. For the same subject, market and goal, the model answers in one call with no tools and no data. Then Qloo checks both answers. Misses are reported as such, never imputed.
@@ -151,6 +161,8 @@ cp .env.example .env     # set QLOO_API_KEY (event-issued) and GEMINI_API_KEY; Q
 npm run selftest         # checks Qloo and model access; prints shapes, never secrets
 npm run dev              # http://localhost:3000
 npm run examples         # re-records public/examples (options: -- --only=slug,slug  -- --baseline-only)
+node scripts/totals.js   # comparison totals over the recordings: the cover metric, the README and the social card quote them
+node scripts/social-card.js  # re-renders public/og.png from docs/og.html (needs Playwright; not part of npm test)
 ```
 
 Any OpenAI-compatible endpoint works instead of Gemini: set `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL`. Styles are compiled with `npm run build:css` (Tailwind CLI via npx, build time only).
