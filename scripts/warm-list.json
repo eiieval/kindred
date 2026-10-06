@@ -35,6 +35,21 @@
   "goal": "Music or event sponsorship"
  },
  {
+  "brand": "Los Angeles Dodgers",
+  "market": "Los Angeles",
+  "goal": "Sponsors for an artist, team or event"
+ },
+ {
+  "brand": "Bad Bunny",
+  "market": "Miami",
+  "goal": "Sponsors for an artist, team or event"
+ },
+ {
+  "brand": "Coachella Music Festival",
+  "market": "Los Angeles",
+  "goal": "Sponsors for an artist, team or event"
+ },
+ {
   "brand": "Nike",
   "market": "London",
   "goal": "Brand partnership or co-branded collab"

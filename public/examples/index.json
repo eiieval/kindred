@@ -5,5 +5,8 @@
   { "slug": "blue-bottle-tokyo", "brand": "Blue Bottle Coffee", "market": "Tokyo", "goal": "Pop-up activation", "industry": "Specialty coffee" },
   { "slug": "robinhood-new-york", "brand": "Robinhood", "market": "New York", "goal": "Podcast or media sponsorship", "industry": "Fintech" },
   { "slug": "veja-paris", "brand": "Veja", "market": "Paris", "goal": "Creator or talent partnership", "industry": "Sneakers" },
-  { "slug": "greenpeace-mexico-city", "brand": "Greenpeace", "market": "Mexico City", "goal": "Music or event sponsorship", "age": "35_and_younger", "industry": "Nonprofit" }
+  { "slug": "greenpeace-mexico-city", "brand": "Greenpeace", "market": "Mexico City", "goal": "Music or event sponsorship", "age": "35_and_younger", "industry": "Nonprofit" },
+  { "slug": "los-angeles-dodgers-los-angeles", "brand": "Los Angeles Dodgers", "market": "Los Angeles", "goal": "Sponsors for an artist, team or event", "industry": "Sports team" },
+  { "slug": "bad-bunny-miami", "brand": "Bad Bunny", "market": "Miami", "goal": "Sponsors for an artist, team or event", "industry": "Music artist" },
+  { "slug": "coachella-los-angeles", "brand": "Coachella Music Festival", "market": "Los Angeles", "goal": "Sponsors for an artist, team or event", "industry": "Music festival" }
 ]

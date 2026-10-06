@@ -1,4 +1,4 @@
-import { tourSteps, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, brandIdsOf, focusCells, reachLabel, partnerReach } from './js/core.js';
+import { tourSteps, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, brandIdsOf, focusCells, reachLabel, partnerReach, poss } from './js/core.js';
 import { startTour, tourSeen } from './js/tour.js';
 import { encodeShare, decodeShare } from './js/share.js';
 
@@ -225,7 +225,7 @@ function renderBrief(raw) {
   const venues = A.venue_evidence || (A.venues || []).map((v) => ({ name: v, evidence: null }));
   const skipped = b.skipped_competitors || [];
   const skipNote = skipped.length ? `<div class="mt-3 rounded-lg border border-white/10 bg-white/[.02] px-3 py-2.5 text-xs text-slate-400">
-      <div class="flex flex-wrap items-center gap-2"><span class="font-medium text-slate-200">Skipped as direct competitors</span>${QTAG}<span class="text-slate-500">high affinity inside ${esc(state.input.brand)}'s own category means a rival, not a partner</span></div>
+      <div class="flex flex-wrap items-center gap-2"><span class="font-medium text-slate-200">Skipped as direct competitors</span>${QTAG}<span class="text-slate-500">high affinity inside ${esc(poss(state.input.brand))} own category means a rival, not a partner</span></div>
       <ul class="mt-1.5 space-y-1">${skipped.slice(0, 5).map((x) => `<li><b class="font-medium text-slate-300">${esc(x.name)}</b>${typeof x.affinity === 'number' ? ` <span class="tabular-nums">${pct(x.affinity)}</span>` : ''} · ${esc(x.reason)}${x.proposed ? ' · <span class="text-amber-200/90">proposed by the model, removed by the server check</span>' : ''}</li>`).join('')}</ul>
       ${skipped.length > 5 ? `<p class="mt-1 text-slate-500">Also skipped: ${esc(skipped.slice(5).map((x) => x.name).join(', '))}.</p>` : ''}
     </div>` : '';

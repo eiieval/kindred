@@ -112,7 +112,7 @@ export function competitorCheck(brand, cand) {
   const industries = (B.industry || []).filter((i) => !BROAD.has(lower(i)));
   if (cand.type === 'place') {
     const [ind, cat] = overlapPair(industries, C.category);
-    return ind ? { rule: 'same_business', reason: `Its Qloo category (${cat}) is ${brand.name}'s own business (${ind})` } : null;
+    return ind ? { rule: 'same_business', reason: `Its Qloo category (${cat}) is ${poss(brand.name)} own business (${ind})` } : null;
   }
   const ind = industries.find((i) => (C.industry || []).some((j) => lower(j) === lower(i)));
   const cat = (B.category || []).find((c) => (C.category || []).some((d) => lower(d) === lower(c)));
@@ -221,6 +221,8 @@ export function kindredPicksOf(brief) {
 }
 
 const of = (a, b) => `${a} of ${b}`;
+// Possessive of a name: "Patagonia's", "Los Angeles Dodgers'".
+export const poss = (name) => (/s$/i.test(String(name)) ? `${name}'` : `${name}'s`);
 
 // Plain-language lines for the comparison panel, finding first. s: compareSummary(); market: the city.
 //   finding  the model-alone picks with no Qloo support for this audience in the market;
@@ -243,7 +245,7 @@ export function compareText(s, market, brand) {
     llm: c.llm_checked ? of(c.llm_present, c.llm_checked) : 'not checked',
     llm_note: c.llm_not_in_qloo ? `${c.llm_not_in_qloo} not in Qloo at all` : '',
   } : null;
-  const cityNote = c ? `City check: this query sends Qloo only the city (${c.market || m}), never ${brand || 'the brand'}'s audience, so it is not the ranking Kindred chose from and the check is not circular.` : '';
+  const cityNote = c ? `City check: this query sends Qloo only the city (${c.market || m}), never ${poss(brand || 'the brand')} audience, so it is not the ranking Kindred chose from and the check is not circular.` : '';
   return { finding, city, cityNote };
 }
 
@@ -332,17 +334,20 @@ export function distanceKm(a, b) {
 }
 
 // What the activation map frames. Qloo's heatmap cells can run across a whole region (Barcelona: Lleida to Girona), so
-// fitting all of them shows Catalonia, not the city. Frame the hotspots plus the cells within `km` of their centroid;
+// fitting all of them shows Catalonia, not the city. Frame the hotspots plus the cells within `km` of their centre;
 // with fewer than two hotspots there is no centre to trust, so use the `fallback` warmest cells. Every cell is still
-// drawn: zooming out reveals them. Returns [{ lat, lng }].
+// drawn: zooming out reveals them. The centre is the median of the hotspots, not their mean, and a hotspot more than
+// twice `km` from it is left out of the frame (the New York run has one upstate, 300 km away: a mean would drag the
+// view there). Returns [{ lat, lng }].
 export function focusCells(cells = [], top = [], { km = 12, fallback = 40 } = {}) {
   const ok = (p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng);
   const pts = (Array.isArray(cells) ? cells : []).filter(ok);
   const hot = (Array.isArray(top) ? top : []).filter(ok);
   const xy = ({ lat, lng }) => ({ lat, lng });
   if (hot.length < 2) return [...pts].sort((a, b) => (b.affinity ?? 0) - (a.affinity ?? 0)).slice(0, fallback).map(xy);
-  const centre = { lat: hot.reduce((s, p) => s + p.lat, 0) / hot.length, lng: hot.reduce((s, p) => s + p.lng, 0) / hot.length };
-  return [...hot, ...pts.filter((p) => distanceKm(p, centre) <= km)].map(xy);
+  const centre = { lat: median(hot.map((p) => p.lat)), lng: median(hot.map((p) => p.lng)) };
+  const framed = [...hot.filter((p) => distanceKm(p, centre) <= 2 * km), ...pts.filter((p) => distanceKm(p, centre) <= km)];
+  return (framed.length ? framed : hot).map(xy);
 }
 
 // The three-step cover tour: which block each caption points at (ids that exist in index.html) and what it says.

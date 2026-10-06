@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { brotliDecompressSync } from 'node:zlib';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { tourSteps, matchName, sameName, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, compactEvents, brandIdsOf, competitorCheck, splitCompetitors, screenBrief, focusCells, distanceKm, reachLabel, partnerReach, pickSubject } from '../public/js/core.js';
+import { tourSteps, matchName, sameName, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, compactEvents, brandIdsOf, competitorCheck, splitCompetitors, screenBrief, focusCells, distanceKm, reachLabel, partnerReach, pickSubject, poss } from '../public/js/core.js';
 import { profileOf } from '../lib/qloo.js';
 import { parsePicks, toDomain } from '../lib/baseline.js';
 import { encodeShare, decodeShare, sanitizeEvents } from '../public/js/share.js';
@@ -141,7 +141,9 @@ expect('hostile link content is reshaped to safe types', hostile.length === 2 &&
 // 7. Every recorded example is small and carries the brief and the LLM-only comparison.
 const examples = JSON.parse(read('public/examples/index.json'));
 // Rivals that earlier recordings proposed as partners (mock judging, round 1), kept as a regression list.
-const RIVALS = { 'patagonia-barcelona': ["Arc'teryx", 'The North Face', 'Fjällräven'], 'liquid-death-austin': ['Voodoo Ranger'], 'veja-paris': ['Osklen'], 'oatly-london': ['Ella Mills'], 'blue-bottle-tokyo': ['Fuglen Tokyo'] };
+const RIVALS = { 'patagonia-barcelona': ["Arc'teryx", 'The North Face', 'Fjällräven'], 'liquid-death-austin': ['Voodoo Ranger'], 'veja-paris': ['Osklen'], 'oatly-london': ['Ella Mills'], 'blue-bottle-tokyo': ['Fuglen Tokyo'],
+  // Round 3: a team's audience also loves other teams, which are not sponsors (the prompt says so; Qloo only tags the Angels).
+  'los-angeles-dodgers-los-angeles': ['Los Angeles Angels', 'Los Angeles Lakers', 'Los Angeles Rams', 'Los Angeles Chargers', 'Las Vegas Raiders', 'LA Kings'] };
 for (const ex of examples) {
   const path = `public/examples/${ex.slug}.json`;
   const ok = existsSync(new URL(path, root));
@@ -205,7 +207,7 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
   const header = html.match(/<header[\s\S]*<\/header>/)[0];
   expect('cover is the headline, one pitch line and the metric: the two long paragraphs are gone', /class="hero-line">Agents, but with taste\. Partnership and sponsorship briefs for brands, artists, teams and events, grounded in Qloo affinities and checked against the same model without Qloo\.<\/p>/.test(header)
     && /class="hero-stat"/.test(header) && (header.match(/<p /g) || []).length === 2 && !/No personal data, just culture|For partnership managers/.test(html));
-  expect('cover has the one-line pitch, the recorded-runs metric and the tour caption region', /Agents, but with taste/.test(html) && /21 of 28 picks/.test(html) && /id="tour"/.test(html) && /21 of the model's 28/.test(read('README.md')));
+  expect('cover has the one-line pitch, the recorded-runs metric and the tour caption region', /Agents, but with taste/.test(html) && /class="hero-stat"/.test(html) && /id="tour"/.test(html));
   expect('?example=x&tour=1 plays the requested example once: the tour reuses its replay', /maybeTour\(asked, asked \? openExample\(asked\) : null\)/.test(appSrc) && /if \(opened\) await opened;/.test(appSrc));
   expect('tour is local only: no network calls in tour.js, storage failures are caught', !/fetch\(/.test(read('public/js/tour.js')) && /catch/.test(read('public/js/tour.js')));
   expect('tour caption is fixed at the bottom with a CSP-safe stylesheet (no inline script)', /\.tour \{ position: fixed/.test(read('styles/input.css')) && !/<script(?![^>]*src=)/.test(html));
@@ -239,12 +241,15 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
   expect('focusCells frames the hotspots and the cells within 12 km, and leaves Girona out', f.length === 2 + 30 && f.every((p) => p.lat < 41.6) && f[0].lat === hot[0].lat && f[1].lng === hot[1].lng);
   const warm = Array.from({ length: 60 }, (_, i) => ({ lat: 10 + i, lng: 20, affinity: 1 - i / 100 }));
   const first40 = warm.slice(0, 40).map((p) => p.lat).join();
+  const stray = focusCells([...cells, { lat: 43.0, lng: -74.99, affinity: 1 }], [...hot, { lat: 41.41, lng: 2.18, affinity: 0.98 }, { lat: 43.0, lng: -74.99, affinity: 0.97 }]);
+  expect('one stray hotspot hundreds of km away does not drag the frame (median centre, hotspots beyond 24 km left out)', stray.length === 3 + 30 && stray.every((p) => p.lat < 41.6));
+  expect('two far-apart hotspots and no cells near the centre still frame the hotspots', focusCells([], [{ lat: 40, lng: 0 }, { lat: 42, lng: 3 }]).length === 2);
   expect('without two hotspots it frames the 40 warmest cells', focusCells(warm, []).length === 40 && focusCells(warm, [hot[0]]).length === 40 && focusCells([...warm].reverse(), []).map((p) => p.lat).join() === first40);
   expect('empty lists and broken coordinates give an empty frame', focusCells([], []).length === 0 && focusCells(undefined, undefined).length === 0 && focusCells([{ lat: 'x', lng: 1 }], [{ lat: NaN, lng: 1 }, hot[0]]).length === 0);
   expect('distanceKm is a haversine distance (Barcelona to Girona is about 85 km)', Math.abs(distanceKm({ lat: 41.3874, lng: 2.1686 }, { lat: 41.9794, lng: 2.8214 }) - 85) < 4);
   expect('the page frames that focus at city zoom and says how to see the rest', /focusCells\(cells, top\)/.test(appSrc) && /maxZoom: 13/.test(appSrc) && /pad\(0\.25\)/.test(appSrc) && /Zoom out to see the whole region\./.test(appSrc));
   const spanKm = (ps) => distanceKm({ lat: Math.min(...ps.map((p) => p.lat)), lng: Math.min(...ps.map((p) => p.lng)) }, { lat: Math.max(...ps.map((p) => p.lat)), lng: Math.max(...ps.map((p) => p.lng)) });
-  for (const slug of ['patagonia-barcelona', 'liquid-death-austin', 'blue-bottle-tokyo']) {
+  for (const { slug } of examples) {
     const h = JSON.parse(read(`public/examples/${slug}.json`)).find((e) => e.type === 'heatmap').data;
     const frame = spanKm(focusCells(h.cells, h.top));
     expect(`example ${slug}: the map frame is city scale (${Math.round(frame)} km corner to corner; all cells: ${Math.round(spanKm(h.cells))} km)`, frame > 5 && frame < 40);
@@ -299,6 +304,9 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
   expect('pickSubject with the typed name: a look-alike brand never beats the artist who was asked for', pickSubject([e('l', 'Skinny Bunny Tea', 'brand'), e('p', 'Bad Bunny', 'person'), e('a', 'Bad Bunny', 'artist')], 'Bad Bunny')?.id === 'a'
     && pickSubject([e('l', 'Patagonia', 'locality'), e('b', 'Patagonia', 'brand'), e('p', 'Patagonia', 'place')], 'Patagonia')?.id === 'b' && pickSubject([e('b', 'Los Angeles Dodgers', 'brand'), e('f', 'Dodgers Foundation', 'brand')], 'dodgers')?.id === 'b');
 
+  expect("possessives of names that end in s read right (\"Dodgers' audience\", not \"Dodgers's\")", poss('Patagonia') === "Patagonia's" && poss('Los Angeles Dodgers') === "Los Angeles Dodgers'"
+    && /never Los Angeles Dodgers' audience/.test(compareText(sc, 'Los Angeles', 'Los Angeles Dodgers').cityNote) && /never the brand's audience/.test(compareText(sc, 'Barcelona').cityNote));
+
   const agentSrc = read('lib/agent.js');
   const baseSrc = read('lib/baseline.js');
   expect('agent prompt: subject may be a brand, artist, team, festival, venue or media title; sponsors rule after the competitor rule, which is unchanged for brands',
@@ -312,6 +320,27 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
     /Matched <b>\$\{esc\(\(s \|\| data\.results\[0\]\)\.name\)\}<\/b>\$\{s && s\.type !== 'brand'/.test(appSrc) && /\$\{esc\(state\.subject\.name\)\} \(\$\{esc\(state\.subject\.type\)\}\)/.test(appSrc)
     && JSON.stringify(sanitizeEvents([{ type: 'entities', data: { results: [], subject: { name: { x: 1 }, type: ['a'], extra: 1 } } }])[0].data.subject) === '{"name":"[object Object]","type":"a"}'
     && sanitizeEvents([{ type: 'entities', data: { results: [], subject: 'x' } }])[0].data.subject === undefined);
+}
+
+// 16. The recordings and their totals: the cover metric, the README and the social card quote what scripts/totals.js computes
+// from the recorded runs (re-record, run `node scripts/totals.js`, update the three together).
+{
+  const { totals, tableRow } = await import('./totals.js');
+  const t = totals();
+  const html = read('public/index.html');
+  const readme = read('README.md');
+  const card = read('docs/og.html');
+  const warm = JSON.parse(read('scripts/warm-list.json'));
+  expect(`${t.examples} recorded runs (at least 10), every one in the totals: ${t.llm_unsupported} of ${t.llm_total} LLM-only picks unsupported, Kindred ${t.kindred_city_present} of ${t.kindred_city_checked} in city data, LLM ${t.llm_city_present} of ${t.llm_city_checked} (${t.llm_not_in_qloo} not in Qloo)`,
+    examples.length >= 10 && t.examples === examples.length && t.llm_total > 0 && t.llm_unsupported <= t.llm_total && t.llm_city_present + t.llm_not_in_qloo <= t.llm_city_checked
+    && t.kindred_city_checked === t.kindred_total && t.kindred_city_present === t.kindred_city_checked && t.kindred_non_obvious === t.kindred_total);
+  expect('cover metric quotes the totals of the recordings', html.includes(`In ${t.examples} recorded runs, ${t.llm_unsupported} of ${t.llm_total} picks from the model alone had no Qloo support for the audience.`));
+  expect('README quotes the same totals (plain finding, city check, partners the model alone missed) and has one table row per recorded run',
+    readme.includes(`Across ${t.examples} recorded runs`) && readme.includes(`${t.llm_unsupported} of the model's ${t.llm_total} picks had no Qloo support`)
+    && readme.includes(`All ${t.kindred_city_present} of Kindred's partners appear in Qloo's data for their city; ${t.llm_city_present} of the model's ${t.llm_city_checked} picks do, and ${t.llm_not_in_qloo} are not in Qloo at all.`)
+    && readme.includes(`None of Kindred's ${t.kindred_total} partners was named by the model alone.`) && t.runs.every((r) => readme.includes(tableRow(r))));
+  expect('social card quotes the same totals', card.includes(`<div class="v">${t.llm_unsupported} of ${t.llm_total}</div>`) && card.includes(`across ${t.examples} recorded runs`));
+  expect('every recorded example is in the warm list with its brand, market and goal, and the README counts the list', examples.every((ex) => warm.some((w) => w.brand === ex.brand && w.market === ex.market && w.goal === ex.goal)) && readme.includes(`pre-warms ${warm.length} subject/city pairs`));
 }
 
 console.log(failed ? `${failed} check(s) failed` : 'all unit checks passed');

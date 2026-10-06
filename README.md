@@ -2,7 +2,7 @@
 
 **Find who your audience already loves, and where to meet them.**
 
-Kindred is an AI agent for brand and partnership teams. Give it a brand, a market city and a goal. It uses **Qloo Taste AI** to read the cultural affinities of that brand's audience across music, podcasts, TV, film, brands and places, maps where that audience concentrates in the city, and writes a partnership brief in which every partner and venue is checked against Qloo results from that run. Direct competitors are kept out using Qloo's own brand tags, and the brief says which ones were skipped and why.
+Kindred is an AI agent for partnership and sponsorship teams at brands, clubs, promoters and agencies. Give it a subject (a brand, an artist, a team, a festival or a venue), a market city and a goal. It uses **Qloo Taste AI** to read the cultural affinities of that audience across music, podcasts, TV, film, brands and places, maps where that audience concentrates in the city, and writes a partnership or sponsorship brief in which every partner and venue is checked against Qloo results from that run. Direct competitors are kept out using Qloo's own brand tags, and the brief says which ones were skipped and why.
 
 Live demo: https://kindred-taste.vercel.app (no login). Built for the Qloo Agentic Hackathon. MIT licence.
 
@@ -39,13 +39,13 @@ Partnerships, sponsorships and pop-ups are usually picked by gut feeling, by who
 
 ## With Qloo vs LLM only
 
-Every brief can be compared with what the same model says without Qloo. For the same brand, market and goal, the model answers in one call with no tools and no data. Then Qloo checks both answers. Misses are reported as such, never imputed.
+Every brief can be compared with what the same model says without Qloo. For the same subject, market and goal, the model answers in one call with no tools and no data. Then Qloo checks both answers. Misses are reported as such, never imputed.
 
-**The plain finding.** Across seven recorded runs (October 2026, model `gemini-flash-lite-latest`), 21 of the model's 28 picks had no Qloo support for the brand's audience in that city: Qloo returned no affinity for them, or its search did not find them at all.
+**The plain finding.** Across 10 recorded runs (October 2026, model `gemini-flash-lite-latest`), 29 of the model's 40 picks had no Qloo support for the audience in that city: Qloo returned no affinity for them, or its search did not find them at all.
 
-**The city check, which is not circular.** Kindred picks partners from the audience's Qloo affinities, so scoring both columns with that same audience query favours Kindred by design. The city check avoids that: it asks Qloo whether each pick appears in its data for the city at all, sending only the city (`signal.location.query`) and never the brand's audience. All 22 of Kindred's partners appear in Qloo's data for their city; 7 of the model's 28 picks do, and 8 are not in Qloo at all.
+**The city check, which is not circular.** Kindred picks partners from the audience's Qloo affinities, so scoring both columns with that same audience query favours Kindred by design. The city check avoids that: it asks Qloo whether each pick appears in its data for the city at all, sending only the city (`signal.location.query`) and never the subject's audience. All 32 of Kindred's partners appear in Qloo's data for their city; 11 of the model's 40 picks do, and 10 are not in Qloo at all.
 
-| Brand · market (goal) | LLM-only picks with no Qloo support | In Qloo's city data, city signal only: Kindred · LLM only | Kindred picks the LLM alone missed | Avg audience affinity: Kindred · LLM only (scored) |
+| Subject · market (goal) | LLM-only picks with no Qloo support | In Qloo's city data, city signal only: Kindred · LLM only | Kindred picks the LLM alone missed | Avg audience affinity: Kindred · LLM only (scored) |
 |---|---|---|---|---|
 | Patagonia · Barcelona (brand partnership or co-branded collab) | 3 of 4 | 3 of 3 · 1 of 4 | 3 of 3 | 95% · 85% (1 of 4) |
 | Oatly · London (pop-up activation) | 3 of 4 | 4 of 4 · 1 of 4 | 4 of 4 | 97% · 85% (1 of 4) |
@@ -54,13 +54,16 @@ Every brief can be compared with what the same model says without Qloo. For the 
 | Robinhood · New York (podcast or media sponsorship) | 3 of 4 | 3 of 3 · 1 of 4 | 3 of 3 | 94% · 69% (1 of 4) |
 | Veja · Paris (creator or talent partnership) | 4 of 4 | 3 of 3 · 0 of 4 | 3 of 3 | 92% · n/a (0 of 4) |
 | Greenpeace · Mexico City (music or event sponsorship, 35 and younger) | 2 of 4 | 3 of 3 · 2 of 4 | 3 of 3 | 94% · 88% (2 of 4) |
+| Los Angeles Dodgers · Los Angeles (sponsors for an artist, team or event) | 1 of 4 | 3 of 3 · 3 of 4 | 3 of 3 | 94% · 89% (3 of 4) |
+| Bad Bunny · Miami (sponsors for an artist, team or event) | 3 of 4 | 4 of 4 · 1 of 4 | 4 of 4 | 95% · 89% (1 of 4) |
+| Coachella Music Festival · Los Angeles (sponsors for an artist, team or event) | 4 of 4 | 3 of 3 · 0 of 4 | 3 of 3 | 95% · n/a (0 of 4) |
 
-None of Kindred's 22 partners was named by the model alone. The affinity averages (last column) are kept for reference only, for the reason above: Kindred's partners come from the top of that same ranking. What the table shows is that a model on its own does not know these affinities: its picks are often local and plausible but unsupported. Five runs were re-recorded on 6 October 2026 with the competitor filter, and the city check was added to all seven the same day from their stored picks; none of the seven briefs contains a direct competitor. The comparison runs live too (button under any live brief), within the same rate limits.
+None of Kindred's 32 partners was named by the model alone. The affinity averages (last column) are kept for reference only, for the reason above: Kindred's partners come from the top of that same ranking. What the table shows is that a model on its own does not know these affinities: its picks are often local and plausible but unsupported, though not everywhere: for the Dodgers only 1 of the model's 4 picks lacks Qloo support. Five runs were re-recorded on 6 October 2026 with the competitor filter, and the city check was added to the first seven the same day from their stored picks; the Dodgers, Bad Bunny and Coachella runs were recorded that day too, with the agent that accepts artists, teams and festivals as the subject. None of the ten briefs contains a direct competitor. The comparison runs live too (button under any live brief), within the same rate limits.
 
 ## How it works
 
 ```
-brand, market, goal ─► server resolves the brand in Qloo (/search)
+subject, market, goal ─► server resolves the subject in Qloo (/search; a brand, team or festival is a brand entity, an artist is not)
                     ─► LLM agent with tool calling (Gemini, OpenAI-compatible API)
                           get_affinities        /v2/insights  filter.type=urn:entity:{artist|podcast|tv_show|brand|place|...}
                           get_heatmap           /v2/insights  filter.type=urn:heatmap
@@ -74,7 +77,7 @@ brand, market, goal ─► server resolves the brand in Qloo (/search)
 
 Why these Qloo calls fit the problem:
 
-- **Entity resolution** (`/search`) pins the brand to a Qloo entity id. The id, not the name, is the signal for everything else.
+- **Entity resolution** (`/search`) pins the subject to a Qloo entity id. The id, not the name, is the signal for everything else. Teams, clubs and festivals are `brand` entities; an artist comes back as `person` and `artist` with the same name, and Kindred queries the `artist`. A brand search for an artist returns look-alikes (Bad Bunny finds "Skinny Bunny Tea"), so the brand search is only accepted when one of its results carries the name that was asked for, and the search without a type decides otherwise.
 - **Cross-domain affinities** (`/v2/insights`, `signal.interests.entities=<brand id>`, one call per domain, localized with `signal.location.query`) answer "who does this audience over-index on" in music, podcasts, TV, brands and more. This is the part an LLM cannot know.
 - **Places** (`filter.type=urn:entity:place`, `filter.location.query`) give concrete venues in the market city.
 - **Heatmap** (`filter.type=urn:heatmap`) shows where in the city the audience concentrates; hotspots get neighbourhood names from OpenStreetMap.
@@ -126,7 +129,7 @@ Patagonia, Barcelona, "Brand partnership or co-branded collab", recorded run of 
 
 ## Demo resilience
 
-- **Recorded real runs** of seven brands in seven cities (outdoor apparel in Barcelona, plant-based food in London, beverages in Austin, specialty coffee in Tokyo, fintech in New York, sneakers in Paris, a nonprofit in Mexico City with an under-35 audience). They replay the exact event stream, including the LLM-only comparison, with no API calls. Each is 20-40 KB. Direct links: `/?example=patagonia-barcelona`, `/?example=blue-bottle-tokyo`, and so on (slugs in `public/examples/index.json`).
+- **Recorded real runs** of ten subjects in nine cities (outdoor apparel in Barcelona, plant-based food in London, beverages in Austin, specialty coffee in Tokyo, fintech in New York, sneakers in Paris, a nonprofit in Mexico City with an under-35 audience, a baseball team and a music festival in Los Angeles, and an artist in Miami). They replay the exact event stream, including the LLM-only comparison, with no API calls. Each is 20-40 KB. Direct links: `/?example=patagonia-barcelona`, `/?example=blue-bottle-tokyo`, and so on (slugs in `public/examples/index.json`).
 - **Share links without storage.** "Copy share link" puts the whole brief, compressed, in the URL fragment (`/#b=...`, about 7 KB). Browsers never send the fragment to a server, nothing is stored, and the link reopens the brief even when quotas run out. Opened links are sanitized (known shapes only, no remote images) and labelled as snapshots.
 - **Friendly limits.** When Qloo, the model or the demo limit says "not now", the UI explains it and offers the recorded runs and a retry.
 
@@ -164,11 +167,11 @@ Deploy: Vercel, with `QLOO_API_KEY` and `GEMINI_API_KEY` as environment variable
 - Entity matching between names and Qloo entities is deliberately conservative; a correct partner written with an unusual spelling can show as unverified.
 - Neighbourhood names come from OpenStreetMap reverse geocoding of heatmap cells and can be approximate.
 - Recorded examples and share links reflect Qloo data on the day they were made. A share link can be edited by whoever shares it; re-run the brief to confirm.
-- The live demo shares one event-issued Qloo key and a free model tier, so the limits are per instance (in memory), not global. What carries the demo under load: the seven recorded runs (no API calls), a cacheable `GET /api/brief` (CDN `s-maxage`, keyed only on the four allow-listed inputs, errors never cached), an in-memory cache and single-flight per instance so identical briefs run once, and `/api/health` (5-minute cached). `node scripts/warm.js` pre-warms 25 brand/city pairs.
+- The live demo shares one event-issued Qloo key and a free model tier, so the limits are per instance (in memory), not global. What carries the demo under load: the ten recorded runs (no API calls), a cacheable `GET /api/brief` (CDN `s-maxage`, keyed only on the four allow-listed inputs, errors never cached), an in-memory cache and single-flight per instance so identical briefs run once, and `/api/health` (5-minute cached). `node scripts/warm.js` pre-warms 28 subject/city pairs.
 
 ## Data handling and security
 
-- Kindred sends Qloo only a brand name, a city and an optional age band. It collects no personal data, has no accounts and stores no briefs on a server.
+- Kindred sends Qloo only the subject's name (a brand, artist, team, festival or venue), a city and an optional age band. It collects no personal data, has no accounts and stores no briefs on a server.
 - Keys live only in server-side environment variables. Upstream error bodies go to server logs with secrets redacted; users see generic messages.
 - Strict Content-Security-Policy with no third-party scripts or fonts: Tailwind is compiled at build time, Leaflet and the Inter font are self-hosted with recorded hashes (`public/vendor`).
 - The agent and brief endpoints enforce input allow-lists, a same-origin check, a per-IP rate limit and a concurrency cap. User fields are treated as data in prompts, and all model output is HTML-escaped before rendering.
