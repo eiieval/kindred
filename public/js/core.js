@@ -279,6 +279,30 @@ export function compactEvents(events, { cells = 300, perDomain = 8, images = tru
   });
 }
 
+const median = (xs) => {
+  const s = [...xs].sort((a, b) => a - b);
+  const n = s.length;
+  return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : null;
+};
+
+// Affinity is not popularity. Qloo returns both for every entity (affinity: how strongly this audience over-indexes;
+// popularity: how widely known it is overall, 0-1). Read together they say what kind of bet a partner is. This is
+// Kindred's own calculation on those two Qloo numbers, not a Qloo metric:
+//   Safe bet    popularity >= 0.97: broad reach on top of high affinity;
+//   Hidden gem  popularity < 0.9 and below the median of the domain's results: a discovery play.
+// No numeric popularity, no label. domainResults: the entities of the same Qloo domain in this run.
+export function reachLabel(entity, domainResults = []) {
+  const p = entity?.popularity;
+  if (typeof p !== 'number' || !Number.isFinite(p)) return null;
+  if (p >= 0.97) return { label: 'Safe bet', note: 'broad reach: high affinity and high popularity' };
+  const mid = median((Array.isArray(domainResults) ? domainResults : []).map((e) => e?.popularity).filter((x) => typeof x === 'number' && Number.isFinite(x)));
+  if (p < 0.9 && mid !== null && p < mid) return { label: 'Hidden gem', note: 'high affinity, lower popularity: a discovery play the audience already loves' };
+  return null;
+}
+
+// The label of a brief partner. Only partners matched to a Qloo result carry one: no evidence, no popularity, no chip.
+export const partnerReach = (p, aff = {}) => (p?.evidence ? reachLabel(p.evidence, aff[p.evidence.domain] || aff[p.domain] || []) : null);
+
 const rad = (d) => (d * Math.PI) / 180;
 
 // Great-circle distance in km (haversine): plenty for deciding what is "near" a city centre.

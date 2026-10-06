@@ -1,4 +1,4 @@
-import { tourSteps, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, brandIdsOf, focusCells } from './js/core.js';
+import { tourSteps, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, brandIdsOf, focusCells, reachLabel, partnerReach } from './js/core.js';
 import { startTour, tourSeen } from './js/tour.js';
 import { encodeShare, decodeShare } from './js/share.js';
 
@@ -17,6 +17,11 @@ const QTAG = '<span class="prov prov-q" title="Returned by the Qloo API in this 
 const AITAG = '<span class="prov prov-ai" title="Written by the AI model from the Qloo data. Validate before acting.">AI interpretation</span>';
 const AGE = { '24_and_younger': '24 and under', '25_to_29': '25 to 29', '30_to_34': '30 to 34', '35_to_44': '35 to 44', '45_to_54': '45 to 54', '55_and_older': '55 and over', '35_and_younger': '35 and under', '36_to_55': '36 to 55' };
 const LABEL = { artist: 'Artists', brand: 'Brands', movie: 'Films', tv_show: 'TV', podcast: 'Podcasts', book: 'Books', videogame: 'Games', place: 'Venues', destination: 'Destinations', person: 'People' };
+
+// Hidden gem / Safe bet: Kindred's reading of Qloo's popularity next to the affinity (reachLabel in js/core.js), not a Qloo metric.
+const REACH_PILL = { 'Hidden gem': 'bg-emerald-400/10 text-emerald-200', 'Safe bet': 'bg-sky-400/10 text-sky-200' };
+const REACH_TEXT = { 'Hidden gem': 'text-emerald-300/90', 'Safe bet': 'text-sky-300/90' };
+const reachPill = (r) => (r ? `<span class="pill ${REACH_PILL[r.label]}" title="${esc(r.note)}">${r.label}</span>` : '');
 
 let state = null;
 let map = null;
@@ -111,7 +116,8 @@ function renderTabs() {
   $('#tabs').querySelectorAll('button').forEach((b) => { b.onclick = () => showTab(b.dataset.d); });
 }
 
-function card(e) {
+function card(e, list = []) {
+  const reach = e.competitor ? null : reachLabel(e, list);
   const img = e.image
     ? `<img src="${esc(e.image)}" alt="" loading="lazy" class="h-28 w-full object-cover rounded-lg">`
     : `<div class="h-28 w-full rounded-lg bg-gradient-to-br from-fuchsia-500/30 to-amber-400/20 grid place-items-center text-3xl font-bold text-white/70">${esc((e.name || '?')[0])}</div>`;
@@ -121,6 +127,7 @@ function card(e) {
     ${e.competitor ? `<div class="mt-1"><span class="pill bg-rose-400/10 text-rose-200" title="${esc(e.competitor)}">Direct competitor · skipped</span></div>` : ''}
     <div class="mt-2 h-1.5 rounded bg-white/10"><div class="h-1.5 rounded bg-gradient-to-r from-fuchsia-400 to-amber-300" style="width:${w}%"></div></div>
     <div class="mt-1 flex justify-between text-[11px] text-slate-400"><span>affinity</span><span>${pct(e.affinity)}</span></div>
+    ${reach ? `<div class="mt-1 text-[11px] ${REACH_TEXT[reach.label]}" title="${esc(reach.note)}">${reach.label}</div>` : ''}
     ${e.tags?.length ? `<div class="mt-1 text-[11px] text-slate-500 truncate">${esc(e.tags.join(' · '))}</div>` : ''}</div>`;
 }
 
@@ -128,7 +135,7 @@ function showTab(d) {
   state.tab = d;
   renderTabs();
   const items = state.aff[d] || [];
-  $('#grid').innerHTML = items.length ? items.map(card).join('') : '<p class="col-span-full text-sm text-slate-500">No results for this domain.</p>';
+  $('#grid').innerHTML = items.length ? items.map((e) => card(e, items)).join('') : '<p class="col-span-full text-sm text-slate-500">No results for this domain.</p>';
 }
 
 const color = (a) => `hsl(${220 - 200 * Math.max(0, Math.min(1, a ?? 0))} 90% 55%)`;
@@ -157,15 +164,17 @@ function toMarkdown(b) {
   const i = state.input;
   const A = b.activation || {};
   const P = b.provenance || {};
+  const tag = (p) => { const r = partnerReach(p, state.aff); return r ? ` (${r.label.toLowerCase()})` : ''; };
   return [
     `# Kindred partnership brief: ${i.brand}${i.market ? ` in ${i.market}` : ''}`, '', `**${b.headline || ''}**`, '', b.audience_summary || '', '', '## Partnerships',
-    ...(b.partnerships || []).map((p) => `- **${p.partner}** (${p.domain}${p.evidence ? `, Qloo affinity ${pct(p.affinity)}, entity ${p.evidence.id}` : ', not verified in Qloo results'}): ${p.concept}\n  - Why (AI interpretation): ${p.why}`),
+    ...(b.partnerships || []).map((p) => `- **${p.partner}** (${p.domain}${p.evidence ? `, Qloo affinity ${pct(p.affinity)}${tag(p)}, entity ${p.evidence.id}` : ', not verified in Qloo results'}): ${p.concept}\n  - Why (AI interpretation): ${p.why}`),
     ...((b.skipped_competitors || []).length ? ['', '## Skipped as direct competitors (Qloo tags)', ...b.skipped_competitors.map((x) => `- ${x.name}${typeof x.affinity === 'number' ? ` (affinity ${pct(x.affinity)})` : ''}: ${x.reason}${x.proposed ? ' (proposed by the model, removed by the server check)' : ''}`)] : []),
     '', `## Activation${A.city ? ` in ${A.city}` : ''}`, A.plan || '', ...(A.venue_evidence || (A.venues || []).map((v) => ({ name: v }))).map((v) => `- ${v.name}${v.evidence ? ` (Qloo venue, affinity ${pct(v.evidence.affinity)})` : ''}`),
     '', '## Messaging themes', ...(b.messaging_themes || []).map((t) => `- ${t}`),
     ...((b.watch_outs || []).length ? ['', '## Watch-outs', ...b.watch_outs.map((w) => `- ${w}`)] : []),
     '', '## Sources and limits',
     `- Qloo data: partner and venue affinities, heatmap and audience skew returned by the Qloo API${state.meta?.started_at ? ` on ${state.meta.started_at.slice(0, 10)}` : ''}. ${P.partners_verified ?? '?'}/${P.partners_total ?? '?'} partners and ${P.venues_verified ?? '?'}/${P.venues_total ?? '?'} venues matched to Qloo results.`,
+    ...((b.partnerships || []).some((p) => partnerReach(p, state.aff)) ? ["- Hidden gem / safe bet: Kindred's own reading of Qloo's popularity next to the affinity (safe bet: popularity 0.97 or more; hidden gem: below 0.9 and below the median of that domain's results). Not a Qloo metric."] : []),
     '- AI interpretation: headline, summary, concepts, plan, themes and watch-outs were written by the model from that data. Validate before acting.',
     '- Affinities are aggregate audience signals, not statements about any individual, not causal, and not a forecast of results.',
     '', '_Generated by Kindred with Qloo Taste AI._',
@@ -200,7 +209,7 @@ function renderBrief(raw) {
   const P = b.provenance || {};
   const partners = (b.partnerships || []).map((p) => `<div class="rounded-xl border ${p.evidence ? 'border-white/10' : 'border-amber-400/40'} bg-white/[.03] p-4">
       <div class="flex flex-wrap items-center gap-2"><span class="text-xs uppercase tracking-wide text-slate-400 whitespace-nowrap">${esc(LABEL[p.domain] || p.domain)}</span>
-      ${p.evidence ? `<span class="ml-auto text-xs rounded-full bg-fuchsia-500/15 text-fuchsia-200 px-2 py-0.5">${pct(p.affinity)} affinity</span>` : '<span class="ml-auto text-xs rounded-full bg-amber-400/10 text-amber-200 px-2 py-0.5">unverified</span>'}</div>
+      ${p.evidence ? `<span class="ml-auto flex flex-wrap items-center gap-1.5">${reachPill(partnerReach(p, state.aff))}<span class="text-xs rounded-full bg-fuchsia-500/15 text-fuchsia-200 px-2 py-0.5">${pct(p.affinity)} affinity</span></span>` : '<span class="ml-auto text-xs rounded-full bg-amber-400/10 text-amber-200 px-2 py-0.5">unverified</span>'}</div>
       <div class="mt-1 text-lg font-semibold">${esc(p.partner)}</div>
       <div class="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">${p.evidence ? `${QTAG}<span>matched Qloo entity ${shortId(p.evidence.id)}</span>` : '<span class="text-amber-200/90">Not found in this run\'s Qloo results: treat as an unverified suggestion.</span>'}</div>
       ${p.evidence && typeof p.model_affinity === 'number' ? `<p class="mt-1 text-[11px] text-amber-200/80">The model wrote ${pct1(p.model_affinity)}; the value shown is Qloo's ${pct1(p.affinity)}.</p>` : ''}
@@ -353,6 +362,7 @@ function renderHow() {
         <div><div class="text-slate-200 font-medium">What this brief does not establish</div><ul class="mt-1 list-disc pl-4 space-y-1">
           <li>Affinities are aggregate: how much the audience of ${esc(state.input.brand)} over-indexes on an entity versus the average Qloo audience. They are not statements about any individual, not causal, and not a probability that anyone will buy or attend.</li>
           <li>Only the top results per domain were retrieved, so an entity missing here is not evidence of low affinity.</li>
+          <li>Hidden gem and Safe bet are Kindred's own reading of two Qloo numbers, affinity and popularity (safe bet: popularity 0.97 or more; hidden gem: below 0.9 and below the median of that domain's results). They are not a Qloo metric and say nothing about fit.</li>
           <li>Audience skews are relative indices, not a census. Never use them to make decisions about individuals.</li>
           <li>Headline, concepts, plan, themes and watch-outs are AI interpretations. Check rights, availability, fit and brand safety before acting.</li>
           <li>Neighbourhood names come from OpenStreetMap reverse geocoding of Qloo heatmap cells and can be approximate.</li>

@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { brotliDecompressSync } from 'node:zlib';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { tourSteps, matchName, sameName, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, compactEvents, brandIdsOf, competitorCheck, splitCompetitors, screenBrief, focusCells, distanceKm } from '../public/js/core.js';
+import { tourSteps, matchName, sameName, verifyBrief, compareSummary, compareText, cityLabel, kindredPicksOf, compactEvents, brandIdsOf, competitorCheck, splitCompetitors, screenBrief, focusCells, distanceKm, reachLabel, partnerReach } from '../public/js/core.js';
 import { profileOf } from '../lib/qloo.js';
 import { parsePicks, toDomain } from '../lib/baseline.js';
 import { encodeShare, decodeShare, sanitizeEvents } from '../public/js/share.js';
@@ -247,6 +247,32 @@ expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/j
     const frame = spanKm(focusCells(h.cells, h.top));
     expect(`example ${slug}: the map frame is city scale (${Math.round(frame)} km corner to corner; all cells: ${Math.round(spanKm(h.cells))} km)`, frame > 5 && frame < 40);
   }
+}
+
+// 14. Affinity is not popularity: Hidden gem / Safe bet from Qloo's popularity (Kindred's reading, not a Qloo metric).
+{
+  const list = [0.999, 0.95, 0.86, 0.5, 0.3].map((popularity, i) => ({ id: `e${i}`, popularity }));
+  expect('Safe bet from popularity 0.97 up', reachLabel({ popularity: 0.97 }, list)?.label === 'Safe bet' && reachLabel({ popularity: 0.999 }, list)?.note === 'broad reach: high affinity and high popularity');
+  expect('Hidden gem below 0.9 and below the median of the domain', reachLabel({ popularity: 0.5 }, list)?.label === 'Hidden gem' && /discovery play the audience already loves/.test(reachLabel({ popularity: 0.3 }, list).note));
+  expect('no label in between, at the median, or with nothing to compare against', reachLabel({ popularity: 0.95 }, list) === null && reachLabel({ popularity: 0.86 }, list) === null && reachLabel({ popularity: 0.5 }, []) === null && reachLabel({ popularity: 0.5 }, [{ id: 'x' }]) === null);
+  expect('no numeric popularity, no label', reachLabel({}, list) === null && reachLabel({ popularity: null }, list) === null && reachLabel({ popularity: '0.99' }, list) === null && reachLabel(null, list) === null);
+  const run = (slug) => {
+    const ev = JSON.parse(read(`public/examples/${slug}.json`));
+    const aff = {};
+    for (const e of ev) if (e.type === 'affinities') aff[e.data.domain] = e.data.results;
+    return { aff, partners: ev.find((e) => e.type === 'brief').data.partnerships };
+  };
+  const pat = run('patagonia-barcelona');
+  const gopro = pat.partners.find((p) => p.partner === 'GoPro');
+  expect('recording: GoPro (popularity 0.999) is a Safe bet; a partner with no Qloo evidence gets no chip', gopro?.evidence?.popularity === 0.999 && partnerReach(gopro, pat.aff)?.label === 'Safe bet'
+    && partnerReach({ partner: 'Invented Band', domain: 'artist', evidence: null }, pat.aff) === null && partnerReach(null, pat.aff) === null);
+  const oat = run('oatly-london');
+  expect('recording: Oddbox (popularity 0.632) is a Hidden gem in the Oatly brief', partnerReach(oat.partners.find((p) => p.partner === 'Oddbox'), oat.aff)?.label === 'Hidden gem');
+  expect('page shows the chip on brief partners and taste-graph cards (note as title) and tags it in the Markdown; skipped rivals get none',
+    /reachPill\(partnerReach\(p, state\.aff\)\)/.test(appSrc) && /e\.competitor \? null : reachLabel\(e, list\)/.test(appSrc) && /title="\$\{esc\(r\.note\)\}"/.test(appSrc) && /\$\{tag\(p\)\}/.test(appSrc)
+    && /bg-emerald-400\/10 text-emerald-200/.test(appSrc) && /bg-sky-400\/10 text-sky-200/.test(appSrc));
+  const css = read('public/styles.css');
+  expect('the stylesheet was rebuilt with the chip colours', ['bg-emerald-400\\/10', 'text-emerald-200', 'bg-sky-400\\/10', 'text-sky-200', 'text-sky-300\\/90', 'text-emerald-300\\/90'].every((c) => css.includes(`.${c}`)));
 }
 
 console.log(failed ? `${failed} check(s) failed` : 'all unit checks passed');

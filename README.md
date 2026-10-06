@@ -84,6 +84,8 @@ Why these Qloo calls fit the problem:
 
 The agent decides which domains fit the goal and fires the calls in parallel; a throttle keeps at most 3 Qloo requests in flight and retries 429s with bounded backoff. The brief can only be submitted after real affinity data has been gathered.
 
+**Affinity is not popularity.** Qloo returns two numbers for every entity: affinity (how strongly this audience over-indexes on it) and popularity (how widely known it is overall). Kindred reads them together and labels partners and taste-graph cards. **Safe bet**: popularity 0.97 or more, broad reach on top of high affinity (GoPro for Patagonia, popularity 0.999). **Hidden gem**: popularity below 0.9 and below the median of that domain's results, a discovery play the audience already loves (Oddbox for Oatly in London, popularity 0.63). The label is our own calculation on Qloo's `affinity` and `popularity`, not a Qloo metric; an entity with no popularity value gets none, and rivals that were skipped get none.
+
 ## Provenance and limits in the product
 
 - Every block of the brief is labelled **Qloo data** (partner affinities, venues, heatmap, taste graph, audience skew) or **AI interpretation** (headline, concepts, plan, themes, watch-outs).
