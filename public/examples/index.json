@@ -1,5 +1,9 @@
 [
   { "slug": "patagonia-barcelona", "brand": "Patagonia", "market": "Barcelona", "goal": "Brand partnership or co-branded collab", "industry": "Outdoor apparel" },
   { "slug": "oatly-london", "brand": "Oatly", "market": "London", "goal": "Pop-up activation", "industry": "Plant-based food" },
-  { "slug": "liquid-death-austin", "brand": "Liquid Death", "market": "Austin", "goal": "Music or event sponsorship", "industry": "Beverages" }
+  { "slug": "liquid-death-austin", "brand": "Liquid Death", "market": "Austin", "goal": "Music or event sponsorship", "industry": "Beverages" },
+  { "slug": "blue-bottle-tokyo", "brand": "Blue Bottle Coffee", "market": "Tokyo", "goal": "Pop-up activation", "industry": "Specialty coffee" },
+  { "slug": "robinhood-new-york", "brand": "Robinhood", "market": "New York", "goal": "Podcast or media sponsorship", "industry": "Fintech" },
+  { "slug": "veja-paris", "brand": "Veja", "market": "Paris", "goal": "Creator or talent partnership", "industry": "Sneakers" },
+  { "slug": "greenpeace-mexico-city", "brand": "Greenpeace", "market": "Mexico City", "goal": "Music or event sponsorship", "age": "35_and_younger", "industry": "Nonprofit" }
 ]

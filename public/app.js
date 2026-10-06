@@ -1,4 +1,5 @@
 import { verifyBrief, compareSummary, brandIdsOf } from './js/core.js';
+import { encodeShare, decodeShare } from './js/share.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -72,7 +73,9 @@ function handle(ev) {
   state.log.push(ev);
   if (type === 'meta') {
     state.meta = data;
-    if (state.source === 'example' && data.started_at) trace('🎞️', `Replay of a real run recorded ${esc(data.started_at.slice(0, 10))}. No API calls.`, 'text-slate-400');
+    const day = esc(String(data.started_at || '').slice(0, 10));
+    if (state.source === 'example') trace('🎞️', `Replay of a real run recorded ${day}. No API calls.`, 'text-slate-400');
+    if (state.source === 'shared') trace('🔗', `Shared snapshot of a run from ${day}, decoded from the link. Not re-run, no API calls.`, 'text-slate-400');
   } else if (type === 'model_turn') {
     const n = (data.tool_calls || []).filter((t) => t !== 'submit_brief').length;
     trace('🧠', (data.tool_calls || []).includes('submit_brief') ? 'Model writes the brief from the data' : `Model plans ${n} Qloo call${n === 1 ? '' : 's'}`, 'text-violet-300/90');
@@ -87,7 +90,7 @@ function handle(ev) {
   else if (type === 'tool_error') trace('⚠️', `${esc(data.name)}: ${esc(data.error)}`, 'text-amber-300/90');
   else if (type === 'brief') renderBrief(data);
   else if (type === 'baseline') { state.baseline = data; renderCompare(); renderHow(); }
-  else if (type === 'error') { trace('⛔', esc(data.message), 'text-rose-300'); setBusy(false); }
+  else if (type === 'error') { trace('⛔', esc(data.message), 'text-rose-300'); setBusy(false); showFallback(data); }
   else if (type === 'done') { trace('🏁', 'Brief ready', 'text-emerald-300'); setBusy(false); renderHow(); }
 }
 
@@ -228,8 +231,47 @@ function renderBrief(raw) {
   const md = toMarkdown(b);
   $('#copy').onclick = () => navigator.clipboard.writeText(md).then(() => { $('#copy').textContent = 'Copied ✓'; });
   $('#dl').onclick = () => download(`kindred-${slug(state.input.brand)}.md`, md, 'text/markdown');
+  $('#share').classList.remove('hidden');
+  $('#share').onclick = shareLink;
   renderCompare();
   renderHow();
+}
+
+// The link carries the brief itself (compressed, in the #fragment, never sent to a server): it reopens
+// this exact result with no API call, even when quotas run out.
+async function shareLink() {
+  const btn = $('#share');
+  try {
+    const url = `${location.origin}${location.pathname}#b=${await encodeShare(state.log)}`;
+    history.replaceState(null, '', url);
+    try {
+      await navigator.clipboard.writeText(url);
+      btn.textContent = 'Link copied ✓';
+    } catch {
+      window.prompt('Copy this link: it reopens this brief without using any API quota.', url);
+    }
+  } catch {
+    btn.textContent = 'Could not create the link';
+  }
+}
+
+// Friendly fallback when Qloo, the model or the demo limit says "not now": point to the recorded runs.
+function showFallback({ message, code } = {}) {
+  if (!Object.keys(state.aff).length) $('#grid').innerHTML = '<p class="col-span-full text-sm text-slate-500">No taste data for this request.</p>';
+  if (state.brief) return;
+  const busy = code === 'rate_limited';
+  const shared = state.source === 'shared';
+  const el = $('#brief');
+  el.classList.remove('hidden');
+  el.innerHTML = `<div class="rounded-xl border border-amber-400/30 bg-amber-400/[.06] p-5">
+      <div class="text-lg font-semibold">${shared ? 'This share link could not be opened' : busy ? 'Live taste data is busy right now' : 'The live agent could not finish this brief'}</div>
+      <p class="mt-2 text-sm text-slate-300">${esc(message || 'Something went wrong.')} ${shared ? 'It may have been cut off when it was copied: ask for the full link again.' : 'Kindred runs on a shared Qloo hackathon key and a free model tier, so many visitors at once can hit their rate limits.'}</p>
+      <p class="mt-3 text-sm text-slate-300">Meanwhile, open a recorded real run: the same agent and real Qloo data, replayed instantly with no API calls, including the comparison with an LLM alone.</p>
+      <div data-exlist class="mt-3 flex flex-wrap gap-2 text-sm">${exampleButtons()}</div>
+      ${state.source === 'live' ? '<button id="retry" class="mt-4 rounded-lg bg-white text-black px-3 py-2 text-xs font-medium">Try again</button>' : ''}
+    </div>`;
+  const retry = $('#retry');
+  if (retry) retry.onclick = () => run({ ...state.input });
 }
 
 function download(name, text, type) {
@@ -278,7 +320,7 @@ function renderHow() {
       <ol class="space-y-2 text-xs text-slate-400">${howSteps()}</ol>
       <div class="space-y-4 text-xs text-slate-400">
         <div><div class="text-slate-200 font-medium">Credentials</div><p class="mt-1">Every Qloo and model call runs on the server. The Qloo key travels only in a request header from the server; it never reaches the browser, this trace, the recordings or the logs.</p></div>
-        <div><div class="text-slate-200 font-medium">Data handling</div><p class="mt-1">Kindred sends Qloo a brand name, a city and an optional age band. It collects no personal data and stores no briefs on a server.</p></div>
+        <div><div class="text-slate-200 font-medium">Data handling</div><p class="mt-1">Kindred sends Qloo a brand name, a city and an optional age band. It collects no personal data and stores no briefs on a server; share links carry the brief inside the link itself.</p></div>
         <div><div class="text-slate-200 font-medium">What this brief does not establish</div><ul class="mt-1 list-disc pl-4 space-y-1">
           <li>Affinities are aggregate: how much the audience of ${esc(state.input.brand)} over-indexes on an entity versus the average Qloo audience. They are not statements about any individual, not causal, and not a probability that anyone will buy or attend.</li>
           <li>Only the top results per domain were retrieved, so an entity missing here is not evidence of low affinity.</li>
@@ -286,6 +328,7 @@ function renderHow() {
           <li>Headline, concepts, plan, themes and watch-outs are AI interpretations. Check rights, availability, fit and brand safety before acting.</li>
           <li>Neighbourhood names come from OpenStreetMap reverse geocoding of Qloo heatmap cells and can be approximate.</li>
           <li>Results reflect Qloo data on ${esc(date)}${state.source === 'example' ? '; this is a replay of a recorded real run' : ''}.</li>
+          ${state.source === 'shared' ? '<li>This is a shared snapshot decoded from its link, not re-run. A link can be edited by whoever shares it: run the brief again to confirm.</li>' : ''}
         </ul></div>
         <button id="dltrace" class="rounded-lg border border-white/15 px-3 py-2 text-xs text-slate-200 hover:border-white/40">Download trace (JSON)</button>
       </div>
@@ -387,7 +430,7 @@ async function run(input) {
       }
     }
     const res = await fetch('/api/agent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
-    if (!res.ok || !res.body) throw new Error((await res.text()) || `HTTP ${res.status}`);
+    if (!res.ok || !res.body) throw Object.assign(new Error((await res.text()) || `HTTP ${res.status}`), { code: res.status === 429 || res.status === 503 ? 'rate_limited' : 'unavailable' });
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = '';
@@ -403,7 +446,7 @@ async function run(input) {
       }
     }
   } catch (e) {
-    handle({ type: 'error', data: { message: e.message } });
+    handle({ type: 'error', data: { message: e.code ? e.message : 'The connection to Kindred was interrupted.', code: e.code || 'unavailable' } });
   } finally {
     setBusy(false);
   }
@@ -435,11 +478,30 @@ const params = new URLSearchParams(location.search);
 fetch('examples/index.json').then((r) => r.json()).then((list) => {
   EXAMPLES = Array.isArray(list) ? list : [];
   $('#examples').innerHTML = `<span class="text-slate-500 mr-1">Recorded real runs:</span>${exampleButtons()}`;
+  document.querySelectorAll('[data-exlist]').forEach((el) => { el.innerHTML = exampleButtons(); });
   const ex = EXAMPLES.find((e) => e.slug === params.get('example'));
   if (ex) openExample(ex);
 }).catch(() => {});
 
-if (params.get('brand')) {
+async function openShared(token) {
+  const events = await decodeShare(token);
+  const meta = events?.find((e) => e.type === 'meta')?.data;
+  const query = events?.find((e) => e.type === 'entities')?.data?.query;
+  const input = { brand: String(meta?.inputs?.brand || query || '').slice(0, 80), market: String(meta?.inputs?.market || '').slice(0, 80), goal: meta?.inputs?.goal, age: meta?.inputs?.age || undefined };
+  reset(input, 'shared');
+  const f = $('#f');
+  f.brand.value = input.brand;
+  f.market.value = input.market;
+  if (!events || !events.some((e) => e.type === 'brief')) {
+    handle({ type: 'error', data: { message: 'This share link is incomplete or damaged.', code: 'unavailable' } });
+    return;
+  }
+  for (const ev of events) handle(ev);
+  setBusy(false);
+}
+
+if (location.hash.startsWith('#b=')) openShared(location.hash.slice(3));
+else if (params.get('brand')) {
   const f = $('#f');
   f.brand.value = params.get('brand').slice(0, 80);
   f.market.value = (params.get('market') || '').slice(0, 80);

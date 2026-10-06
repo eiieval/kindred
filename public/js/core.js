@@ -26,6 +26,8 @@ export function matchName(a, b) {
 
 export const sameName = matchName;
 
+// A model rounding 0.961 to 96% is not a misquote; anything beyond half a percentage point is.
+const TOLERANCE = 0.005;
 const asUnit = (n) => (typeof n === 'number' && Number.isFinite(n) ? (n > 1 ? n / 100 : n) : null);
 
 function findIn(aff, name, domain) {
@@ -53,7 +55,7 @@ export function verifyBrief(brief, aff = {}) {
     const claimed = asUnit(p.affinity);
     const hit = findIn(aff, p.partner, p.domain);
     const out = { ...p, evidence: hit ? evidenceOf(hit, p.domain) : null, affinity: hit ? hit.affinity ?? null : null };
-    if (claimed !== null && (!hit || Math.abs(claimed - (hit.affinity ?? -1)) > 0.0005)) {
+    if (claimed !== null && (!hit || Math.abs(claimed - (hit.affinity ?? -1)) > TOLERANCE)) {
       out.model_affinity = claimed;
       if (hit) corrected++;
     }
