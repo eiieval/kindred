@@ -61,6 +61,37 @@ let last = 0;
 for (let i = 0; i < 9; i++) last = (await call({ headers: { 'x-forwarded-for': '9.9.9.9' }, body: {} })).status;
 expect('9th request in 10 minutes from one IP is limited (429)', last === 429);
 
+// 3b. Demo resilience: cacheable GET brief, shared in-memory cache, health. Same guards as the POST path.
+const { default: briefApi } = await import('../api/brief.js');
+const { default: healthApi } = await import('../api/health.js');
+const { flights } = await import('../lib/briefs.js');
+async function get(fn, url, headers = {}) {
+  let out = '';
+  let status = 200;
+  let head = {};
+  const res = { writeHead(s, hd) { status = s; head = hd || {}; }, write(c) { out += c; }, end(c) { if (c) out += c; } };
+  await fn({ method: 'GET', url, headers: { host: 'localhost', 'x-forwarded-for': '5.5.5.5', ...headers } }, res);
+  return { status, out, head };
+}
+const g1 = await get(briefApi, '/api/brief?brand=Veja&market=Paris&goal=Pop-up%20activation&evil=1');
+const g1j = JSON.parse(g1.out);
+expect('GET brief returns the event list with a CDN cache header', g1.status === 200 && g1j.events.some((e) => e.type === 'brief') && /s-maxage=86400/.test(g1.head['cache-control']));
+const before = flights.size();
+const g2 = await get(briefApi, '/api/brief?brand=%20veja%20&market=PARIS&goal=Pop-up%20activation');
+expect('same inputs (any case or spacing) are served from the in-memory cache, not re-run', g2.status === 200 && flights.size() === before && JSON.parse(g2.out).events[0].data.started_at === g1j.events[0].data.started_at);
+expect('cached events carry only the allow-listed inputs, no keys or visitor data', !/test-qloo-key|5\.5\.5\.5|evil/.test(g1.out));
+const g3 = await get(briefApi, '/api/brief?brand=Veja', { 'sec-fetch-site': 'cross-site' });
+expect('GET brief refuses cross-site requests', g3.status === 403);
+expect('GET brief refuses a foreign Origin', (await get(briefApi, '/api/brief?brand=Veja', { origin: 'https://evil.example' })).status === 403);
+expect('GET brief needs a brand', (await get(briefApi, '/api/brief?market=Paris')).status === 400);
+const pc = await call({ headers: { 'x-forwarded-for': '6.6.6.6' }, body: { brand: 'Veja', market: 'Paris', goal: 'Pop-up activation' } });
+expect('POST stream replays the cached run instantly with the same events', pc.out.includes('"type":"brief"') && pc.out.includes(g1j.events[0].data.started_at) && flights.size() === before);
+const pf = await call({ headers: { 'x-forwarded-for': '6.6.6.7' }, body: { brand: 'Veja', market: 'Paris', goal: 'Pop-up activation', fresh: true } });
+expect('fresh:true forces a new run', !pf.out.includes(g1j.events[0].data.started_at) && pf.out.includes('"type":"done"'));
+const hl = await get(healthApi, '/api/health');
+const hj = JSON.parse(hl.out);
+expect('health reports qloo and llm status and is CDN-cacheable for 5 min', hj.qloo === 'ok' && hj.llm === 'ok' && hj.ok === true && /s-maxage=300/.test(hl.head['cache-control']) && !/key|token/i.test(hl.out.replace(/"ok"/g, '')));
+
 // 4. Upstream failures never leak configuration or provider details.
 delete process.env.MOCK;
 delete process.env.QLOO_API_KEY;
@@ -69,6 +100,13 @@ console.error = () => {};
 const down = await call({ headers: { 'x-forwarded-for': '3.3.3.3' }, body: { brand: 'Patagonia' } });
 console.error = origError;
 expect('Qloo outage fails fast with a generic message', /Taste data is unavailable/.test(down.out) && !/QLOO_API_KEY|Qloo \d|projects\//.test(down.out));
+
+// 4b. A failed run is never cached and its error is generic.
+flights.clear();
+console.error = () => {};
+const bad = await get(briefApi, '/api/brief?brand=Patagonia&market=Paris', { 'x-forwarded-for': '7.7.7.7' });
+console.error = origError;
+expect('failed GET brief is not cacheable, generic error, nothing stored', bad.status === 502 && bad.head['cache-control'] === 'no-store' && /Taste data is unavailable/.test(bad.out) && flights.size() === 0);
 
 console.log(failed ? `${failed} check(s) failed` : 'all checks passed');
 process.exit(failed ? 1 : 0);

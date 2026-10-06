@@ -7,6 +7,8 @@ import { loadEnv } from './lib/env.js';
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url));
 loadEnv();
 const { default: agent } = await import('./api/agent.js');
+const { default: brief } = await import('./api/brief.js');
+const { default: health } = await import('./api/health.js');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.md': 'text/markdown', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8' };
 const port = Number(process.env.PORT) || 3000;
 // Same security headers as production, read from vercel.json.
@@ -15,6 +17,8 @@ const SECURITY = Object.fromEntries((cfg.headers?.[0]?.headers || []).map((x) =>
 
 http.createServer(async (req, res) => {
   if (req.url.startsWith('/api/agent')) return agent(req, res);
+  if (req.url.startsWith('/api/brief')) return brief(req, res);
+  if (req.url.startsWith('/api/health')) return health(req, res);
   const path = decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '') || 'index.html';
   if (path.includes('..')) { res.writeHead(400); return res.end(); }
   try {

@@ -1,6 +1,6 @@
 {
   "outputDirectory": "public",
-  "functions": { "api/agent.js": { "maxDuration": 60 } },
+  "functions": { "api/agent.js": { "maxDuration": 60 }, "api/brief.js": { "maxDuration": 60 }, "api/health.js": { "maxDuration": 15 } },
   "headers": [
     {
       "source": "/(.*)",
