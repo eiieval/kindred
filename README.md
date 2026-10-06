@@ -162,14 +162,14 @@ Deploy: Vercel, with `QLOO_API_KEY` and `GEMINI_API_KEY` as environment variable
 - Entity matching between names and Qloo entities is deliberately conservative; a correct partner written with an unusual spelling can show as unverified.
 - Neighbourhood names come from OpenStreetMap reverse geocoding of heatmap cells and can be approximate.
 - Recorded examples and share links reflect Qloo data on the day they were made. A share link can be edited by whoever shares it; re-run the brief to confirm.
-- The live demo shares one event-issued Qloo key and a free model tier, so it is rate limited (per IP and globally).
+- The live demo shares one event-issued Qloo key and a free model tier, so the limits are per instance (in memory), not global. What carries the demo under load: the seven recorded runs (no API calls), a cacheable `GET /api/brief` (CDN `s-maxage`, keyed only on the four allow-listed inputs, errors never cached), an in-memory cache and single-flight per instance so identical briefs run once, and `/api/health` (5-minute cached). `node scripts/warm.js` pre-warms 25 brand/city pairs.
 
 ## Data handling and security
 
 - Kindred sends Qloo only a brand name, a city and an optional age band. It collects no personal data, has no accounts and stores no briefs on a server.
 - Keys live only in server-side environment variables. Upstream error bodies go to server logs with secrets redacted; users see generic messages.
 - Strict Content-Security-Policy with no third-party scripts or fonts: Tailwind is compiled at build time, Leaflet and the Inter font are self-hosted with recorded hashes (`public/vendor`).
-- The agent endpoint enforces input allow-lists, a same-origin check, a per-IP rate limit and a concurrency cap. User fields are treated as data in prompts, and all model output is HTML-escaped before rendering.
+- The agent and brief endpoints enforce input allow-lists, a same-origin check, a per-IP rate limit and a concurrency cap. User fields are treated as data in prompts, and all model output is HTML-escaped before rendering.
 - `npm test` covers these guarantees offline, plus the provenance checks, the comparison logic, share links and the size and content of every recording.
 
 ## Credits

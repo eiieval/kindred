@@ -181,5 +181,17 @@ expect("no Google Fonts in the page or the CSP, font-src 'self'", !/googleapis|g
 // 9. Browser scripts parse (a stray quote in a template breaks the whole page, and no other check loads app.js).
 expect('browser scripts parse', ['public/app.js', 'public/js/core.js', 'public/js/share.js'].every((p) => spawnSync(process.execPath, ['--check', fileURLToPath(new URL(p, root))]).status === 0));
 
+
+// 10. Warm list: every entry is valid input and builds the same URL the page requests.
+{
+  const { warmUrl } = await import('./warm.js');
+  const { briefInput, GOALS } = await import('../lib/guard.js');
+  const list = JSON.parse(read('scripts/warm-list.json'));
+  expect('warm list has 25 or more brand/city pairs, all with allow-listed goals', list.length >= 25 && list.every((e) => e.brand && e.market && GOALS.includes(e.goal)));
+  expect('warm list entries survive input cleaning unchanged', list.every((e) => { const c = briefInput(e); return c.brand === e.brand && c.market === e.market && c.goal === e.goal; }));
+  expect('warm URL matches the page query (brand, market, goal, age order)', warmUrl('https://x.test/', { brand: "Ben & Jerry's", market: 'London', goal: GOALS[0] }) === `https://x.test/api/brief?brand=Ben+%26+Jerry%27s&market=London&goal=${encodeURIComponent(GOALS[0]).replace(/%20/g, '+')}&age=`);
+  expect('page builds its cache query the same way', /new URLSearchParams\(\{ brand: input\.brand, market: input\.market \|\| '', goal: input\.goal \|\| '', age: input\.age \|\| '' \}\)/.test(read('public/app.js')));
+}
+
 console.log(failed ? `${failed} check(s) failed` : 'all unit checks passed');
 process.exit(failed ? 1 : 0);

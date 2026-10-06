@@ -77,6 +77,7 @@ function handle(ev) {
     state.meta = data;
     const day = esc(String(data.started_at || '').slice(0, 10));
     if (state.source === 'example') trace('🎞️', `Replay of a real run recorded ${day}. No API calls.`, 'text-slate-400');
+    if (state.source === 'cache') trace('⚡', `Served from cache · computed ${day}. Same agent and Qloo data, no new API calls. <button type="button" data-live class="underline text-slate-200 hover:text-white">Run live</button>`, 'text-slate-400');
     if (state.source === 'shared') trace('🔗', `Shared snapshot of a run from ${day}, decoded from the link. Not re-run, no API calls.`, 'text-slate-400');
   } else if (type === 'model_turn') {
     const n = (data.tool_calls || []).filter((t) => t !== 'submit_brief').length;
@@ -285,7 +286,7 @@ function showFallback({ message, code } = {}) {
       <p class="mt-2 text-sm text-slate-300">${esc(message || 'Something went wrong.')} ${shared ? 'It may have been cut off when it was copied: ask for the full link again.' : 'Kindred runs on a shared Qloo hackathon key and a free model tier, so many visitors at once can hit their rate limits.'}</p>
       <p class="mt-3 text-sm text-slate-300">Meanwhile, open a recorded real run: the same agent and real Qloo data, replayed instantly with no API calls, including the comparison with an LLM alone.</p>
       <div data-exlist class="mt-3 flex flex-wrap gap-2 text-sm">${exampleButtons()}</div>
-      ${state.source === 'live' ? '<button id="retry" class="mt-4 rounded-lg bg-white text-black px-3 py-2 text-xs font-medium">Try again</button>' : ''}
+      ${state.source === 'live' || state.source === 'cache' ? '<button id="retry" class="mt-4 rounded-lg bg-white text-black px-3 py-2 text-xs font-medium">Try again</button>' : ''}
     </div>`;
   const retry = $('#retry');
   if (retry) retry.onclick = () => run({ ...state.input });
@@ -371,7 +372,7 @@ function renderCompare() {
   if (!state.brief) return;
   const b = state.baseline;
   if (!b) {
-    if (state.source !== 'live') return;
+    if (state.source !== 'live' && state.source !== 'cache') return;
     el.classList.remove('hidden');
     el.innerHTML = `<div class="flex flex-wrap items-center gap-3"><h2 class="font-semibold">With Qloo vs LLM only</h2>
       <button id="cmpgo" class="ml-auto text-xs rounded-lg bg-white text-black px-3 py-2 font-medium disabled:opacity-60">Run the LLM-only comparison</button></div>
@@ -445,7 +446,19 @@ async function runCompare() {
   }
 }
 
-async function run(input) {
+// Cache-first: a brief someone already ran comes back from the CDN or the instance cache in well under a second.
+// If nothing arrives within 2.5 s the live stream takes over (the server joins the run it already started).
+async function fromCache(input) {
+  const q = new URLSearchParams({ brand: input.brand, market: input.market || '', goal: input.goal || '', age: input.age || '' });
+  try {
+    const r = await fetch(`/api/brief?${q}`, { signal: AbortSignal.timeout(2500) });
+    if (!r.ok) return null;
+    const events = (await r.json()).events;
+    return Array.isArray(events) && events.some((e) => e.type === 'brief') ? events : null;
+  } catch { return null; }
+}
+
+async function run(input, { fresh = false } = {}) {
   reset(input, input.slug ? 'example' : 'live');
   history.replaceState(null, '', `?${new URLSearchParams(input.slug ? { example: input.slug } : { brand: input.brand, market: input.market || '' })}`);
   try {
@@ -456,7 +469,15 @@ async function run(input) {
         return;
       }
     }
-    const res = await fetch('/api/agent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+    if (!fresh) {
+      const events = await fromCache(input);
+      if (events) {
+        state.source = 'cache';
+        for (const ev of events) { handle(ev); await sleep(ev.type === 'tool_call' ? 120 : 40); }
+        return;
+      }
+    }
+    const res = await fetch('/api/agent', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(fresh ? { ...input, fresh: true } : input) });
     if (!res.ok || !res.body) throw Object.assign(new Error((await res.text()) || `HTTP ${res.status}`), { code: res.status === 429 || res.status === 503 ? 'rate_limited' : 'unavailable' });
     const reader = res.body.getReader();
     const dec = new TextDecoder();
@@ -498,6 +519,21 @@ const exampleButtons = () => EXAMPLES.map((e, i) => `<button type="button" data-
 document.addEventListener('click', (ev) => {
   const b = ev.target.closest?.('[data-ex]');
   if (b && EXAMPLES[b.dataset.ex]) openExample(EXAMPLES[b.dataset.ex]);
+  if (ev.target.closest?.('[data-live]') && state) run({ brand: state.input.brand, market: state.input.market, goal: state.input.goal, age: state.input.age }, { fresh: true });
+});
+
+// Service status dot, checked the first time the visitor shows intent (not on page load: no API calls until then).
+let healthChecked = false;
+$('#f').addEventListener('focusin', async () => {
+  if (healthChecked) return;
+  healthChecked = true;
+  try {
+    const h = await (await fetch('/api/health', { signal: AbortSignal.timeout(6000) })).json();
+    const ok = h.qloo === 'ok' && h.llm === 'ok';
+    const el = $('#status');
+    el.classList.remove('hidden');
+    el.innerHTML = `<span class="inline-block h-2 w-2 rounded-full ${ok ? 'bg-emerald-400' : 'bg-amber-400'} mr-1.5"></span>${ok ? 'Live agent ready' : 'Live data is under pressure: the recorded runs above always work'}`;
+  } catch { /* status is optional */ }
 });
 
 // Links: ?example=<slug> replays a recorded real run; ?brand=Patagonia&market=Barcelona runs a live brief.
